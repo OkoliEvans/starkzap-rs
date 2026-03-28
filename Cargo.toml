@@ -1,0 +1,85 @@
+[package]
+name = "starkzap-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94.0"
+authors = ["Mist Labs"]
+description = "A Rust SDK for seamless Starknet wallet integration — starkzap v1 mirror"
+repository = "https://github.com/OkoliEvans/starkzap-rs"
+license = "MIT"
+keywords = ["starknet", "blockchain", "sdk", "wallet", "defi"]
+categories = ["cryptography::cryptocurrencies", "network-programming"]
+
+[features]
+# No features enabled by default — base SDK works out of the box.
+default = []
+
+# Enable Privy server-side signer (requires PRIVY_APP_ID + PRIVY_APP_SECRET env vars)
+privy = ["dep:base64"]
+
+# Enable Cartridge session-key signer (accepts a pre-issued session key from the browser flow)
+cartridge = []
+
+# Enable WASM compilation target (wasm32-unknown-unknown)
+# Build with: cargo build --target wasm32-unknown-unknown --features wasm
+wasm = []
+
+# Convenience: enable all optional signers
+full = ["privy", "cartridge"]
+
+[dependencies]
+# Starknet core — provider, account, signing
+starknet = "0.12"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client (AVNU paymaster + Privy REST API)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+
+# Async streams for tx.watch()
+futures = "0.3"
+tokio-stream = "0.1"
+
+# Logging
+tracing = "0.1"
+
+# Base64 — only needed for Privy auth header
+base64 = { version = "0.22", optional = true }
+
+# Hex encoding utilities
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+dotenvy = "0.15"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[example]]
+name = "basic_transfer"
+path = "examples/basic_transfer.rs"
+
+[[example]]
+name = "paymaster_transfer"
+path = "examples/paymaster_transfer.rs"
+
+[[example]]
+name = "staking_flow"
+path = "examples/staking_flow.rs"
+
+[[example]]
+name = "privy_signer"
+path = "examples/privy_signer.rs"
+required-features = ["privy"]
+
+[[example]]
+name = "cartridge_signer"
+path = "examples/cartridge_signer.rs"
+required-features = ["cartridge"]
