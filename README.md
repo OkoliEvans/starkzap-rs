@@ -10,12 +10,12 @@ Built for the Starknet community.
 
 ```toml
 [dependencies]
-starkzap-rs = { git = "https://github.com/your-org/starkzap-rs" }
+starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs" }
 
-# Optional signers
-starkzap-rs = { git = "...", features = ["privy"] }
-starkzap-rs = { git = "...", features = ["cartridge"] }
-starkzap-rs = { git = "...", features = ["full"] }  # all signers
+# Optional signers / helpers
+starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["privy"] }
+starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["cartridge"] }
+starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["full"] }
 ```
 
 Once published to crates.io:
@@ -47,6 +47,9 @@ async fn main() -> starkzap_rs::error::Result<()> {
     )?;
     let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
 
+    // Auto-deploy a funded fresh account on first use.
+    wallet.ensure_ready(DeployPolicy::IfNeeded).await?;
+
     // 3. Check balance
     let strk = sepolia::strk();
     let balance = wallet.balance_of(&strk).await?;
@@ -66,25 +69,34 @@ async fn main() -> starkzap_rs::error::Result<()> {
 
 ---
 
-## Features
+## Dependencies
 
-| Feature | Description | Enabled by default |
-|---|---|---|
-| *(base)* | StarkSigner, tokens, transfers, staking, paymaster | ✅ |
-| `privy` | Privy server-side signer | ❌ |
-| `cartridge` | Cartridge session-key signer | ❌ |
-| `full` | All optional signers | ❌ |
-| `wasm` | WebAssembly target support | ❌ |
+The SDK depends on:
 
----
+- [`starknet`](https://crates.io/crates/starknet) (`0.17`) for Starknet accounts, providers, and signing
+- `tokio` for async runtime
 
-## Supported Targets
+These are installed automatically when you add `starkzap-rs`.
 
-| Target | How |
+### Cargo features
+
+Like StarkZap TS uses optional integrations and peer dependencies, `starkzap-rs`
+uses optional Cargo features:
+
+| Feature | What it enables |
 |---|---|
-| **Server / CLI** (tokio) | Default — no feature flags needed |
-| **WASM / browser** | `--features wasm --target wasm32-unknown-unknown` |
-| **React Native / mobile** | Via WASM or native Rust via FFI |
+| `privy` | Privy server-side signer |
+| `cartridge` | Cartridge session signer |
+| `full` | All optional signers |
+| `wasm` | WASM-target crate builds |
+
+The crate uses `default = []`, so the base SDK works without enabling any feature.
+
+### Targets
+
+- **Server / CLI** (tokio) — first-class target
+- **Browser helper tooling** — see `examples/cartridge_session_web/` for the Cartridge session exporter
+- **WASM crate build** — `cargo build --features wasm --target wasm32-unknown-unknown`
 
 ---
 
@@ -105,12 +117,12 @@ let sdk = StarkZap::new(StarkZapConfig::sepolia().with_rpc(
 ));
 ```
 
-**Public fallback endpoints** (BlastAPI, used when no `rpc_url` is provided):
-- Mainnet: `https://starknet-mainnet.public.blastapi.io/rpc/v0_8`
-- Sepolia: `https://starknet-sepolia.public.blastapi.io/rpc/v0_8`
+**Default fallback endpoints** (used when no `rpc_url` is provided):
+- Mainnet: `https://starknet.drpc.org`
+- Sepolia: `https://starknet-sepolia.drpc.org`
 - Devnet: `http://127.0.0.1:5050/rpc`
 
-For production, always use your own Alchemy/Infura key — public endpoints are rate-limited.
+For production, always use your own RPC key — public endpoints are rate-limited.
 
 ---
 
@@ -140,44 +152,54 @@ use starkzap_rs::signer::PrivySigner;
 
 let mut privy = PrivySigner::from_env()?;
 
-// Create a new wallet for a user
-let address = privy.create_wallet("user-id-123").await?;
+// Create a new wallet for a user and persist the returned metadata
+let wallet = privy.create_wallet_info("user-id-123").await?;
 
 // Or load an existing wallet
-let privy = PrivySigner::from_env()?.with_wallet("wallet_id", address_felt);
+let privy = PrivySigner::from_env()?.with_wallet_and_public_key(
+    wallet.wallet_id,
+    wallet.address,
+    wallet.public_key.unwrap(),
+);
 ```
 
 **Setup:**
 1. Create a Privy app at https://privy.io
 2. Dashboard → Settings → API Keys → copy App ID and App Secret
-3. Set `PRIVY_APP_ID` and `PRIVY_APP_SECRET`
+3. Persist `wallet_id`, `address`, and `public_key` from the first wallet creation
+4. Set `PRIVY_APP_ID` and `PRIVY_APP_SECRET`
 
 ### CartridgeSigner (`cartridge` feature)
 
-Uses a session key pre-issued by the Cartridge Controller browser wallet.
+Uses a full session bundle exported from the Cartridge Controller flow.
 
-**Browser flow (JavaScript):**
-```javascript
-const session = await controller.createSession({
-    expiresAt: Date.now() + 86400000, // 24h
-    policies: [{ contractAddress: "0x...", selector: "transfer" }],
-})
-// Send to your Rust backend:
-const sessionKey = session.sessionKeyPair.privateKey
-const accountAddress = controller.address
-```
+Use the helper app in [`examples/cartridge_session_web/`](examples/cartridge_session_web) to:
+- authenticate with Cartridge
+- approve session policies
+- export `CARTRIDGE_SESSION_BUNDLE_B64`
 
 **Rust backend:**
 ```rust
 use starkzap_rs::signer::CartridgeSigner;
 
-let signer = CartridgeSigner::new(&session_key, &account_address)?;
+let signer = CartridgeSigner::from_env()?;
 let wallet = sdk.onboard(OnboardConfig::Cartridge(signer)).await?;
 ```
 
-> Cartridge's primary auth flow (passkeys, biometrics) is browser-native and
-> cannot be replicated server-side. The session key pattern is Cartridge's own
-> designed mechanism for delegating to backends.
+> Cartridge's primary auth flow (passkeys, biometrics, username/password, social)
+> is browser-native. Rust consumes the exported session bundle and executes through
+> the registered session account model.
+
+Helper app setup:
+
+```sh
+cd examples/cartridge_session_web
+npm install
+npm run dev
+```
+
+Then open the local Vite URL, create a session, and copy `CARTRIDGE_SESSION_BUNDLE_B64`
+into your `.env`.
 
 ---
 
@@ -245,6 +267,9 @@ let hash = wallet
 ```
 
 Obtain a mainnet API key at https://app.avnu.fi.
+
+If an account class is not compatible with sponsored execution, the SDK now
+falls back to normal `user_pays` execution instead of failing the entire flow.
 
 ---
 
@@ -321,6 +346,29 @@ println!("{}", tx.hash_hex()); // "0x..."
 
 ---
 
+## Documentation
+
+The main usage guide today is this README plus the runnable examples in `examples/`.
+
+For the closest reference model and API design, see the official StarkZap TypeScript SDK:
+- https://github.com/keep-starknet-strange/starkzap
+
+---
+
+## Examples
+
+The repo includes runnable examples for the main SDK flows:
+
+- `basic_transfer`
+- `paymaster_transfer`
+- `staking_flow`
+- `privy_signer`
+- `cartridge_signer`
+
+For Cartridge session export, use the helper app in `examples/cartridge_session_web/`.
+
+---
+
 ## Setup & Development
 
 ```sh
@@ -345,11 +393,17 @@ cargo test
 # Start devnet first: starknet-devnet --seed 0
 cargo test -- --ignored
 
-# Run an example
+# Run examples
 cargo run --example basic_transfer
 cargo run --example staking_flow
+cargo run --example paymaster_transfer
 cargo run --example privy_signer --features privy
 cargo run --example cartridge_signer --features cartridge
+
+# Run the Cartridge session exporter helper
+cd examples/cartridge_session_web
+npm install
+npm run dev
 
 # Lint
 cargo clippy -- -D warnings
@@ -381,11 +435,10 @@ starknet-devnet --seed 0
 - [x] Core: StarkSigner, tokens, transfer, execute
 - [x] AVNU paymaster
 - [x] Staking: enter/exit/rewards/discovery
-- [x] Privy server signer (wallet creation)
-- [x] Cartridge session-key signer
-- [ ] Full Privy → starknet-rs signing delegation (#1)
-- [ ] Auto account deploy (UDC, ArgentX v0.4/v0.5)
-- [ ] Token/validator preset codegen script
+- [x] Privy signer flow
+- [x] Cartridge session flow
+- [x] Auto account deploy
+- [ ] Token/validator preset codegen
 - [ ] WASM build verification
 - [ ] Published to crates.io
 
