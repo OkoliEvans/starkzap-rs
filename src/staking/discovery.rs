@@ -113,7 +113,9 @@ where
         // Cairo ABI flattening here is:
         // - `Option<u16>` => [tag] or [tag, value]
         // - `Span<PoolInfo>` => [len, pool0..., pool1...]
-        // - `PoolInfo` => [pool_contract, token_address, amount_low, amount_high]
+        // - `PoolInfo` can flatten as:
+        //   - [pool_contract, token_address, amount] on mainnet today
+        //   - [pool_contract, token_address, amount_low, amount_high] on other layouts
         let (len_index, pools_start) = if result[0] == Felt::ZERO {
             (2usize, 3usize) // commission = Some(value)
         } else {
@@ -129,9 +131,22 @@ where
             .try_into()
             .unwrap_or(0usize);
 
+        let remaining = result.len().saturating_sub(pools_start);
+        let stride = match len {
+            0 => 0,
+            _ if remaining == len * 3 => 3,
+            _ if remaining == len * 4 => 4,
+            _ => {
+                return Err(StarkzapError::Staking(format!(
+                    "malformed staker_pool_info response: expected {} pool entries with stride 3 or 4, got {} trailing felts",
+                    len, remaining
+                )));
+            }
+        };
+
         let mut pools = Vec::with_capacity(len);
         for index in 0..len {
-            let base = pools_start + (index * 4);
+            let base = pools_start + (index * stride);
             let address = *result.get(base).ok_or_else(|| StarkzapError::Staking(
                 "malformed staker_pool_info response".into(),
             ))?;

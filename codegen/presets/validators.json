@@ -1,0 +1,66 @@
+{
+  "mainnet": [
+    {
+      "name": "Karnot",
+      "staker_address": "0x072543946080646d1aac08bb4ba6f6531b2b29ce41ebfe72b8a6506500d5220e"
+    },
+    {
+      "name": "Ready (prev. Argent)",
+      "staker_address": "0x00d3b910d8c528bf0216866053c3821ac6c97983dc096bff642e9a3549210ee7"
+    },
+    {
+      "name": "Twinstake",
+      "staker_address": "0x01aca15766cb615c3b7ca0fc3680cbde8b21934bb2e7b41594b9d046d7412c00"
+    },
+    {
+      "name": "AVNU",
+      "staker_address": "0x036963c7b56f08105ffdd7f12560924bdc0cb29ce210417ecbc8bf3c7e4b9090"
+    },
+    {
+      "name": "Braavos",
+      "staker_address": "0x04b00f97e2d2168b91fe64ceeace4a41fc274a85bbdd0adc402c3d0cf9f91bbb"
+    },
+    {
+      "name": "Nethermind",
+      "staker_address": "0x02952d1e0de1de08fbe6a75d9d0e388e3e89d5d9d42d5f85906ec42ea02e35de"
+    },
+    {
+      "name": "Pragma",
+      "staker_address": "0x077d4b4e7ae321aabd0a5a7322108635fcbd0cd746f9ae217b8ea00363494b65"
+    }
+  ],
+  "sepolia": [
+    {
+      "name": "moonli.me",
+      "staker_address": "0x003bc84d802c8a57cbe4eb4a6afa9b1255e907cba9377b446d6f4edf069403c5"
+    },
+    {
+      "name": "Teku",
+      "staker_address": "0x068b5f8e8eb23a42ad290800f229f09b1bcc8d43537dd27a127769ffa13b59f1"
+    },
+    {
+      "name": "onchainaustria",
+      "staker_address": "0x0771f68ba376b6507a7d21e15d04d48aa6563ea131f89668b92be06707218741"
+    },
+    {
+      "name": "CroutonDigital",
+      "staker_address": "0x05862ff0bf252dcd0a872104ffcf04a33d8ee9a48d4ef2d5c548147046502502"
+    },
+    {
+      "name": "DSRV",
+      "staker_address": "0x0789447b5b58aaa87e8ac285288b39bc806aefbc056e49947eb531f7088334ea"
+    },
+    {
+      "name": "TheBuidl",
+      "staker_address": "0x05469d2d0be78cb53c0e806b7a68e5f492c221b4faeccebe6532372f2a32d63c"
+    },
+    {
+      "name": "Keplr",
+      "staker_address": "0x0400dd26dd8802d94d36c780dd67e03d9a6f9922ab25557ca52d36b64484029d"
+    },
+    {
+      "name": "Nethermind",
+      "staker_address": "0x05c85dd30df86ed1f2cfe1806417efb2cae421bffdee8110a74a3d3eb95b28d3"
+    }
+  ]
+}

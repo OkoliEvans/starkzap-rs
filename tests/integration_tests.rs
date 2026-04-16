@@ -92,12 +92,19 @@ fn token_presets_have_correct_decimals() {
     assert_eq!(mainnet::strk().decimals, 18);
     assert_eq!(mainnet::eth().decimals, 18);
     assert_eq!(mainnet::wbtc().decimals, 8);
+    assert_eq!(mainnet::tbtc().decimals, 18);
+    assert_eq!(mainnet::lbtc().decimals, 8);
+    assert_eq!(mainnet::xwbtc().decimals, 8);
+    assert_eq!(mainnet::solvbtc().decimals, 18);
 }
 
 #[test]
 fn token_by_symbol_case_insensitive() {
     assert!(mainnet::by_symbol("usdc").is_some());
     assert!(mainnet::by_symbol("USDC").is_some());
+    assert!(mainnet::by_symbol("wbtc").is_some());
+    assert!(mainnet::by_symbol("tbtc").is_some());
+    assert!(mainnet::by_symbol("lbtc").is_some());
     assert!(mainnet::by_symbol("doesnotexist").is_none());
 }
 

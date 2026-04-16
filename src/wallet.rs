@@ -720,8 +720,14 @@ where
              this will cause -32602 Invalid params on Alchemy v0.9+"
         );
 
-        let response = Client::builder()
-            .http1_only()
+        let client = {
+            let builder = Client::builder();
+            #[cfg(not(target_arch = "wasm32"))]
+            let builder = builder.http1_only();
+            builder
+        };
+
+        let response = client
             .build()
             .map_err(StarkzapError::Http)?
             .post(&self.rpc_url)

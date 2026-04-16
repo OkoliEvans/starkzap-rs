@@ -96,7 +96,7 @@ The crate uses `default = []`, so the base SDK works without enabling any featur
 
 - **Server / CLI** (tokio) — first-class target
 - **Browser helper tooling** — see `examples/cartridge_session_web/` for the Cartridge session exporter
-- **WASM crate build** — `cargo build --features wasm --target wasm32-unknown-unknown`
+- **WASM crate build** — verified with `cargo check --features wasm --target wasm32-unknown-unknown`
 
 ---
 
@@ -214,16 +214,30 @@ let usdc_e = mainnet::usdc_e(); // 6 decimals (bridged)
 let strk  = mainnet::strk();    // 18 decimals
 let eth   = mainnet::eth();     // 18 decimals
 let wbtc  = mainnet::wbtc();    // 8 decimals
+let tbtc  = mainnet::tbtc();    // 18 decimals
+let lbtc  = mainnet::lbtc();    // 8 decimals
+let xwbtc = mainnet::xwbtc();   // 8 decimals
+let solvbtc = mainnet::solvbtc(); // 18 decimals
 let wsteth = mainnet::wsteth(); // 18 decimals
 
 // Sepolia
 let usdc = sepolia::usdc();
 let strk = sepolia::strk();
 let eth  = sepolia::eth();
+let wbtc = sepolia::wbtc();
+let tbtc = sepolia::tbtc();
+let lbtc = sepolia::lbtc();
 
 // By symbol
 let tok = mainnet::by_symbol("USDC").unwrap();
 ```
+
+Token and validator preset data is generated at build time from:
+- `codegen/presets/tokens.json`
+- `codegen/presets/validators.json`
+
+That keeps the Rust API stable while making preset updates data-driven.
+BTC-family Starknet assets from StarkZap TS V1 are included in these generated presets.
 
 ---
 
@@ -270,6 +284,29 @@ Obtain a mainnet API key at https://app.avnu.fi.
 
 If an account class is not compatible with sponsored execution, the SDK now
 falls back to normal `user_pays` execution instead of failing the entire flow.
+
+---
+
+## Live Test Harnesses
+
+For deliberate real-network verification, the repo includes ignored live tests:
+
+```sh
+# Sepolia / generic live checks
+cargo test --test integration_tests -- --ignored --nocapture
+
+# Mainnet STRK systems
+cargo test --test mainnet_live -- --ignored --nocapture
+
+# Mainnet WBTC systems
+cargo test --test mainnet_wbtc_live -- --ignored --nocapture
+```
+
+Notes:
+- these tests can submit real transactions
+- `tests/mainnet_live.rs` includes optional staking writes gated behind `RUN_MAINNET_STAKING_WRITES=1`
+- `tests/mainnet_wbtc_live.rs` uses `MAINNET_WBTC_TRANSFER_AMOUNT` for live WBTC checks
+- paymaster tests run only when `AVNU_API_KEY` is set
 
 ---
 
@@ -438,8 +475,8 @@ starknet-devnet --seed 0
 - [x] Privy signer flow
 - [x] Cartridge session flow
 - [x] Auto account deploy
-- [ ] Token/validator preset codegen
-- [ ] WASM build verification
+- [x] Token/validator preset codegen
+- [x] WASM build verification
 - [ ] Published to crates.io
 
 ---
