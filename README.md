@@ -1,5 +1,8 @@
 # starkzap-rs
 
+[![crates.io](https://img.shields.io/crates/v/starkzap-rs.svg)](https://crates.io/crates/starkzap-rs)
+[![docs.rs](https://docs.rs/starkzap-rs/badge.svg)](https://docs.rs/starkzap-rs)
+
 A Rust SDK for seamless Starknet wallet integration — the faithful Rust mirror of [starkzap](https://github.com/keep-starknet-strange/starkzap).
 
 Built for the Starknet community.
@@ -10,17 +13,17 @@ Built for the Starknet community.
 
 ```toml
 [dependencies]
-starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs" }
+starkzap-rs = "0.1.0"
 
 # Optional signers / helpers
-starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["privy"] }
-starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["cartridge"] }
-starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["full"] }
+starkzap-rs = { version = "0.1.0", features = ["privy"] }
+starkzap-rs = { version = "0.1.0", features = ["cartridge"] }
+starkzap-rs = { version = "0.1.0", features = ["full"] }
 ```
 
-Once published to crates.io:
+Git install is still available if you want the latest repository version:
 ```toml
-starkzap-rs = "0.1"
+starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs" }
 ```
 
 ---
