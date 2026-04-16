@@ -14,11 +14,23 @@ pub enum StarkzapError {
     #[error("Signer error: {0}")]
     Signer(String),
 
+    #[error("Cartridge session error: {0}")]
+    Cartridge(String),
+
     #[error("Invalid private key: must be a 0x-prefixed hex felt")]
     InvalidPrivateKey,
 
     #[error("Invalid address: {0}")]
     InvalidAddress(String),
+
+    #[error("Signer address is unavailable and could not be derived from the selected account preset")]
+    MissingSignerAddress,
+
+    #[error("Signer public key is unavailable")]
+    MissingPublicKey,
+
+    #[error("Configured address {provided} does not match preset-derived address {expected}")]
+    AddressMismatch { provided: String, expected: String },
 
     // ── Transactions ──────────────────────────────────────────────────────────
     #[error("Transaction rejected: {reason}")]
@@ -47,6 +59,12 @@ pub enum StarkzapError {
 
     #[error("Paymaster response missing field: {field}")]
     PaymasterMalformed { field: String },
+
+    #[error("Paymaster feature is not supported by the configured backend: {feature}")]
+    PaymasterUnsupported { feature: String },
+
+    #[error("Paymaster validation failed: {reason}")]
+    PaymasterValidation { reason: String },
 
     // ── Privy (feature = "privy") ─────────────────────────────────────────────
     #[cfg(feature = "privy")]

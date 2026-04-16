@@ -1,4 +1,4 @@
-//! Network configuration — Mainnet and Sepolia.
+//! Network configuration — Mainnet, Sepolia, and Devnet.
 
 use starknet::core::types::Felt;
 
@@ -13,22 +13,20 @@ pub enum Network {
     Sepolia,
     /// Local starknet-devnet instance (development — no tokens needed).
     ///
-    /// Defaults to `http://127.0.0.1:5050`. Override with a custom `rpc_url`
-    /// in [`crate::sdk::StarkZapConfig`] if you use a different port.
+    /// Defaults to `http://127.0.0.1:5050`. Override via
+    /// [`crate::sdk::StarkZapConfig::with_rpc`] if you use a different port.
     Devnet,
 }
 
 impl Network {
     /// Default public JSON-RPC endpoint for this network.
     ///
-    /// - **Mainnet / Sepolia**: BlastAPI public endpoints (RPC v0.8).
-    ///   For production traffic, supply your own Alchemy/Infura key via
-    ///   [`crate::sdk::StarkZapConfig::with_rpc`].
-    /// - **Devnet**: local starknet-devnet at `127.0.0.1:5050`.
+    /// For production always pass your own URL via
+    /// [`crate::sdk::StarkZapConfig::with_rpc`].
     pub fn default_rpc_url(&self) -> &'static str {
         match self {
-            Network::Mainnet => "https://starknet-mainnet.public.blastapi.io/rpc/v0_8",
-            Network::Sepolia => "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
+            Network::Mainnet => "https://starknet.drpc.org",
+            Network::Sepolia => "https://starknet-sepolia.drpc.org",
             Network::Devnet  => "http://127.0.0.1:5050/rpc",
         }
     }
@@ -40,7 +38,7 @@ impl Network {
             Network::Mainnet => Felt::from_hex_unchecked("0x534e5f4d41494e"),
             // "SN_SEPOLIA"
             Network::Sepolia => Felt::from_hex_unchecked("0x534e5f5345504f4c4941"),
-            // "SN_GOERLI" — devnet uses this by default; override if your devnet differs
+            // Devnet mirrors Sepolia by default
             Network::Devnet  => Felt::from_hex_unchecked("0x534e5f5345504f4c4941"),
         }
     }
@@ -55,14 +53,23 @@ impl Network {
         matches!(self, Network::Devnet)
     }
 
-    /// AVNU paymaster base URL for this network.
+    /// AVNU paymaster JSON-RPC base URL.
     ///
-    /// Devnet has no AVNU paymaster — [`FeeMode::Paymaster`] will error on devnet.
+    /// This mirrors StarkZap TS / `starknet.js` `PaymasterRpc`.
+    pub fn avnu_paymaster_url(&self) -> &'static str {
+        match self {
+            Network::Mainnet => "https://starknet.paymaster.avnu.fi",
+            Network::Sepolia => "https://sepolia.paymaster.avnu.fi",
+            Network::Devnet  => "http://localhost:0", // intentionally invalid
+        }
+    }
+
+    /// AVNU swap/exchange REST API base URL.
     pub fn avnu_base_url(&self) -> &'static str {
         match self {
             Network::Mainnet => "https://starknet.api.avnu.fi",
             Network::Sepolia => "https://sepolia.api.avnu.fi",
-            Network::Devnet  => "http://localhost:0", // no paymaster on devnet
+            Network::Devnet  => "http://localhost:0",
         }
     }
 
@@ -75,15 +82,14 @@ impl Network {
 
     /// Starknet native staking contract address.
     ///
-    /// Staking is not available on devnet. Returns `Felt::ZERO` for devnet,
-    /// which will produce a meaningful error when called against the RPC.
+    /// Returns `Felt::ZERO` for devnet — staking is not available locally.
     pub fn staking_contract(&self) -> Felt {
         match self {
             Network::Mainnet => Felt::from_hex_unchecked(
-                "0x0e8c7920d56e3cc753bab32bc7b01b4011c151c5e893db2a90f48d1e02bbaedb",
+                "0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7",
             ),
             Network::Sepolia => Felt::from_hex_unchecked(
-                "0x07a1b1f4ee3e8efc02b4a0e3fe5a1ef33d3521c63b37e6a51588fd6c57c17db0",
+                "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1",
             ),
             Network::Devnet  => Felt::ZERO,
         }

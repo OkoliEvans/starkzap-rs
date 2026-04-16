@@ -23,7 +23,8 @@
 //!
 //! let strk = mainnet::strk();
 //! let validators = mainnet_validators();
-//! let pool = validators[0].pool_address;
+//! let pools = wallet.get_staker_pools(validators[0].staker_address).await?;
+//! let pool = pools[0].address;
 //!
 //! // Stake 100 STRK
 //! let amount = Amount::parse("100", &strk)?;

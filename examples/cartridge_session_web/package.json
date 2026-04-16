@@ -1,0 +1,19 @@
+{
+  "name": "cartridge-session-export",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@cartridge/controller": "^0.13.11",
+    "starknet": "^8.5.2"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-plugin-wasm": "^3.4.1"
+  }
+}

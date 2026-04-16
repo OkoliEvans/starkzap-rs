@@ -19,14 +19,19 @@
 //! ```rust,no_run
 //! use starkzap_rs::signer::PrivySigner;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), starkzap_rs::StarkzapError> {
 //! let signer = PrivySigner::from_env()?;
 //!
 //! // Create a new embedded wallet for a user (returns address)
+//! let mut signer = signer;
 //! let address = signer.create_wallet("user-id-123").await?;
 //!
 //! // Or load an existing wallet
-//! let signer = PrivySigner::with_address(signer, address);
-//! # Ok::<(), starkzap_rs::StarkzapError>(())
+//! let signer = signer.with_wallet("wallet-id", address);
+//! # let _ = signer;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## How signing works
@@ -42,7 +47,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use starknet::{
     core::types::Felt,
-    signers::{Signer, VerifyingKey, SigningKey, LocalWallet},
+    signers::{Signer, SignerInteractivityContext, VerifyingKey},
 };
 
 use crate::error::{Result, StarkzapError};
@@ -60,6 +65,16 @@ pub struct PrivySigner {
     wallet_id: Option<String>,
     /// The on-chain Starknet address of the Privy wallet.
     pub(crate) address: Option<Felt>,
+    /// The Stark public key when available.
+    pub(crate) public_key: Option<Felt>,
+}
+
+/// Privy wallet metadata needed to reuse a created Starknet wallet.
+#[derive(Debug, Clone)]
+pub struct PrivyWalletInfo {
+    pub wallet_id: String,
+    pub address: Felt,
+    pub public_key: Option<Felt>,
 }
 
 // ── Internal Privy API types ──────────────────────────────────────────────────
@@ -73,6 +88,8 @@ struct CreateWalletRequest<'a> {
 struct CreateWalletResponse {
     id: String,
     address: String,
+    #[serde(default)]
+    public_key: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -104,6 +121,7 @@ impl PrivySigner {
             app_secret: app_secret.into(),
             wallet_id: None,
             address: None,
+            public_key: None,
         }
     }
 
@@ -129,15 +147,24 @@ impl PrivySigner {
         self
     }
 
+    /// Attach a known wallet ID, address, and Stark public key.
+    pub fn with_wallet_and_public_key(
+        mut self,
+        wallet_id: impl Into<String>,
+        address: Felt,
+        public_key: Felt,
+    ) -> Self {
+        self.wallet_id = Some(wallet_id.into());
+        self.address = Some(address);
+        self.public_key = Some(public_key);
+        self
+    }
+
     /// Create a new Starknet embedded wallet via the Privy API.
     ///
-    /// Returns the on-chain address of the new wallet.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` — your application's user identifier (passed to Privy for
-    ///   wallet ownership attribution)
-    pub async fn create_wallet(&mut self, _user_id: &str) -> Result<Felt> {
+    /// Returns the created wallet metadata so callers can persist the
+    /// `wallet_id`, `address`, and `public_key` for later sessions.
+    pub async fn create_wallet_info(&mut self, _user_id: &str) -> Result<PrivyWalletInfo> {
         let auth = self.basic_auth_header();
 
         let resp = self
@@ -159,11 +186,31 @@ impl PrivySigner {
         let payload: CreateWalletResponse = resp.json().await?;
         let address = Felt::from_hex(&payload.address)
             .map_err(|_| StarkzapError::InvalidAddress(payload.address.clone()))?;
+        let public_key = payload
+            .public_key
+            .as_deref()
+            .map(Felt::from_hex)
+            .transpose()
+            .map_err(|_| StarkzapError::Other("Invalid Privy public key".into()))?;
 
-        self.wallet_id = Some(payload.id);
+        let wallet_id = payload.id;
+
+        self.wallet_id = Some(wallet_id.clone());
         self.address = Some(address);
+        self.public_key = public_key;
 
-        Ok(address)
+        Ok(PrivyWalletInfo {
+            wallet_id,
+            address,
+            public_key,
+        })
+    }
+
+    /// Create a new Starknet embedded wallet via the Privy API.
+    ///
+    /// Returns the on-chain address of the new wallet.
+    pub async fn create_wallet(&mut self, user_id: &str) -> Result<Felt> {
+        Ok(self.create_wallet_info(user_id).await?.address)
     }
 
     /// Sign a transaction hash using the Privy signing API.
@@ -207,6 +254,16 @@ impl PrivySigner {
         self.address
     }
 
+    /// The Privy wallet ID of the loaded wallet.
+    pub fn wallet_id(&self) -> Option<&str> {
+        self.wallet_id.as_deref()
+    }
+
+    /// The Stark public key of the loaded Privy wallet, when available.
+    pub fn public_key(&self) -> Option<Felt> {
+        self.public_key
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     fn basic_auth_header(&self) -> String {
@@ -218,7 +275,7 @@ impl PrivySigner {
 }
 
 fn parse_signature(sig: &str) -> Result<(Felt, Felt)> {
-    // Privy typically returns "r,s" or a single hex; adjust if their format changes.
+    // Privy may return either "r,s" or a 64-byte concatenated signature.
     let parts: Vec<&str> = sig.split(',').collect();
     match parts.as_slice() {
         [r, s] => {
@@ -230,9 +287,45 @@ fn parse_signature(sig: &str) -> Result<(Felt, Felt)> {
             })?;
             Ok((r, s))
         }
-        _ => Err(StarkzapError::PrivySigning(format!(
-            "unexpected signature format: {}",
-            sig
-        ))),
+        _ => {
+            let normalized = sig.trim().strip_prefix("0x").unwrap_or(sig.trim());
+            if normalized.len() == 128 && normalized.chars().all(|c| c.is_ascii_hexdigit()) {
+                let r = Felt::from_hex(&format!("0x{}", &normalized[..64]))
+                    .map_err(|_| StarkzapError::PrivySigning("invalid r component".into()))?;
+                let s = Felt::from_hex(&format!("0x{}", &normalized[64..]))
+                    .map_err(|_| StarkzapError::PrivySigning("invalid s component".into()))?;
+                Ok((r, s))
+            } else {
+                Err(StarkzapError::PrivySigning(format!(
+                    "unexpected signature format: {}",
+                    sig
+                )))
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Signer for PrivySigner {
+    type GetPublicKeyError = StarkzapError;
+    type SignError = StarkzapError;
+
+    async fn get_public_key(&self) -> std::result::Result<VerifyingKey, Self::GetPublicKeyError> {
+        let public_key = self
+            .public_key
+            .ok_or_else(|| StarkzapError::PrivySigning("No public key loaded".into()))?;
+        Ok(VerifyingKey::from_scalar(public_key))
+    }
+
+    async fn sign_hash(
+        &self,
+        hash: &Felt,
+    ) -> std::result::Result<starknet::core::crypto::Signature, Self::SignError> {
+        let (r, s) = self.sign_hash(*hash).await?;
+        Ok(starknet::core::crypto::Signature { r, s })
+    }
+
+    fn is_interactive(&self, _context: SignerInteractivityContext<'_>) -> bool {
+        false
     }
 }

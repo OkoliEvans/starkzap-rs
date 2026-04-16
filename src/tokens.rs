@@ -5,13 +5,16 @@
 //! # Usage
 //!
 //! ```rust
-//! use starkzap_rs::tokens::{mainnet, sepolia};
+//! use starkzap_rs::{Network, tokens::{self, mainnet, sepolia}};
 //!
-//! let usdc = mainnet::USDC;
-//! let strk = sepolia::STRK;
+//! let usdc = mainnet::usdc();
+//! let strk = sepolia::strk();
+//! let mainnet_tokens = tokens::all(Network::Mainnet);
 //! ```
 
 use starknet::core::types::Felt;
+
+use crate::network::Network;
 
 /// A Starknet ERC-20 token definition.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +41,22 @@ impl Token {
     }
 }
 
+/// All preset tokens for the given network.
+pub fn all(network: Network) -> Vec<Token> {
+    match network {
+        Network::Mainnet => mainnet::all(),
+        Network::Sepolia | Network::Devnet => sepolia::all(),
+    }
+}
+
+/// Look up a token by symbol for the given network.
+pub fn by_symbol(network: Network, symbol: &str) -> Option<Token> {
+    match network {
+        Network::Mainnet => mainnet::by_symbol(symbol),
+        Network::Sepolia | Network::Devnet => sepolia::by_symbol(symbol),
+    }
+}
+
 // ── Mainnet presets ───────────────────────────────────────────────────────────
 
 /// Mainnet token presets.
@@ -50,10 +69,10 @@ pub mod mainnet {
     pub fn usdc() -> Token {
         Token::new(
             "USDC",
-            "USD Coin",
+            "USDC",
             6,
             Felt::from_hex_unchecked(
-                "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+                "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
             ),
         )
     }
@@ -62,10 +81,10 @@ pub mod mainnet {
     pub fn usdc_e() -> Token {
         Token::new(
             "USDC.e",
-            "Bridged USD Coin",
+            "Bridged USDC",
             6,
             Felt::from_hex_unchecked(
-                "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
+                "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
             ),
         )
     }
@@ -151,10 +170,10 @@ pub mod sepolia {
     pub fn usdc() -> Token {
         Token::new(
             "USDC",
-            "USD Coin",
+            "USDC",
             6,
             Felt::from_hex_unchecked(
-                "0x005a643907b9a4bc6a55e9069c4fd5fd1f5c79a22470690f75556c4736e34426",
+                "0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343",
             ),
         )
     }
@@ -183,9 +202,33 @@ pub mod sepolia {
         )
     }
 
+    /// Bridged USDC on Sepolia (6 decimals)
+    pub fn usdc_e() -> Token {
+        Token::new(
+            "USDC.e",
+            "USDC.e",
+            6,
+            Felt::from_hex_unchecked(
+                "0x053b40a647cedfca6ca84f542a0fe36736031905a9639a7f19a3c1e66bfd5080",
+            ),
+        )
+    }
+
+    /// Wrapped stETH on Sepolia (18 decimals)
+    pub fn wsteth() -> Token {
+        Token::new(
+            "wstETH",
+            "Wrapped liquid staked Ether 2.0",
+            18,
+            Felt::from_hex_unchecked(
+                "0x030de54c07e57818ae4a1210f2a3018a0b9521b8f8ae5206605684741650ac25",
+            ),
+        )
+    }
+
     /// All Sepolia tokens as a `Vec`.
     pub fn all() -> Vec<Token> {
-        vec![usdc(), strk(), eth()]
+        vec![usdc(), usdc_e(), strk(), eth(), wsteth()]
     }
 
     /// Look up a token by symbol (case-insensitive).

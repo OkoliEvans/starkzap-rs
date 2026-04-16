@@ -223,7 +223,7 @@ amount.is_zero();          // false
 ## Paymaster (AVNU Gasless)
 
 ```rust
-use starkzap_rs::paymaster::{FeeMode, PaymasterConfig};
+use starkzap_rs::paymaster::{FeeMode, PaymasterConfig, PaymasterDetails};
 
 // Sepolia — no API key needed
 let config = PaymasterConfig::new();
@@ -236,6 +236,12 @@ let config = PaymasterConfig::from_env();
 // Execute any calls gaslessly
 let tx = wallet.execute(calls, FeeMode::Paymaster(config)).await?;
 tx.wait().await?;
+
+// TS-style explicit paymaster flow
+let details = PaymasterDetails::sponsored();
+let hash = wallet
+    .execute_paymaster_transaction(calls, details, std::env::var("AVNU_API_KEY").ok())
+    .await?;
 ```
 
 Obtain a mainnet API key at https://app.avnu.fi.
@@ -253,7 +259,7 @@ use starkzap_rs::{
 
 let strk = mainnet::strk();
 let validators = mainnet_validators();
-let pool = validators[0].pool_address;
+let pool = wallet.get_staker_pools(validators[0].staker_address).await?[0].address;
 
 // Enter pool (stake)
 let tx = wallet.enter_pool(

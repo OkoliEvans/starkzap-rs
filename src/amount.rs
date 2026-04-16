@@ -9,7 +9,7 @@
 //! ```rust
 //! use starkzap_rs::{Amount, tokens::mainnet};
 //!
-//! let usdc = mainnet::USDC;
+//! let usdc = mainnet::usdc();
 //! let amount = Amount::parse("10.5", &usdc)?;
 //! assert_eq!(amount.raw(), 10_500_000); // 6 decimals
 //! println!("{}", amount.to_formatted()); // "10.5 USDC"

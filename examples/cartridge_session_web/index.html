@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cartridge Session Export</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f1e8;
+        --panel: #fffaf0;
+        --ink: #1f2937;
+        --muted: #5b6472;
+        --accent: #0f766e;
+        --accent-strong: #115e59;
+        --line: #d9cfbf;
+        --danger: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 30%),
+          linear-gradient(180deg, #fbf7ef 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+      main {
+        width: min(880px, calc(100vw - 32px));
+        margin: 32px auto;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: color-mix(in srgb, var(--panel) 92%, white);
+        box-shadow: 0 24px 80px rgba(31, 41, 55, 0.08);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 3vw, 2.8rem);
+        line-height: 1.05;
+      }
+      p { color: var(--muted); line-height: 1.55; }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        margin: 24px 0;
+      }
+      label {
+        display: block;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      input, select, button, textarea {
+        width: 100%;
+        font: inherit;
+        border-radius: 12px;
+      }
+      input, select, textarea {
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        background: white;
+        color: var(--ink);
+      }
+      textarea {
+        min-height: 180px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 20px 0 8px;
+      }
+      button {
+        width: auto;
+        padding: 12px 18px;
+        border: 0;
+        background: var(--accent);
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: white;
+        color: var(--accent-strong);
+        border: 1px solid var(--line);
+      }
+      .status {
+        margin-top: 12px;
+        min-height: 24px;
+        font-weight: 700;
+      }
+      .status.error { color: var(--danger); }
+      .status.ok { color: var(--accent-strong); }
+      .card {
+        margin-top: 24px;
+        padding: 18px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.75);
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.93rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Cartridge Session Export</h1>
+      <p>
+        This page creates a Cartridge session with a transfer policy, then exports the
+        session signer private key and account address that <code>starkzap-rs</code>
+        needs for the Rust <code>cartridge_signer</code> example.
+      </p>
+
+      <div class="grid">
+        <div>
+          <label for="rpcUrl">RPC URL</label>
+          <input id="rpcUrl" value="https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_9" />
+        </div>
+        <div>
+          <label for="chainId">Chain</label>
+          <select id="chainId">
+            <option value="SN_SEPOLIA" selected>Sepolia</option>
+            <option value="SN_MAIN">Mainnet</option>
+          </select>
+        </div>
+        <div>
+          <label for="tokenAddress">Policy Contract Address</label>
+          <input id="tokenAddress" value="0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d" />
+        </div>
+        <div>
+          <label for="entrypoint">Policy Entrypoint</label>
+          <input id="entrypoint" value="transfer" />
+        </div>
+        <div>
+          <label for="authMethod">Authentication Method</label>
+          <select id="authMethod">
+            <option value="password" selected>Username / Password</option>
+            <option value="google">Google</option>
+            <option value="discord">Discord</option>
+            <option value="webauthn">Passkey / WebAuthn</option>
+            <option value="metamask">MetaMask</option>
+            <option value="walletconnect">WalletConnect</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="connectBtn" type="button">Connect And Export Session</button>
+        <button id="copyBtn" class="secondary" type="button">Copy Env Block</button>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div class="card">
+        <p>
+          This opens Cartridge's own authentication UI. Choose username/password here,
+          then complete the login and approval inside the Cartridge screen.
+        </p>
+      </div>
+
+      <div class="card">
+        <label for="output">Exported credentials</label>
+        <textarea id="output" readonly></textarea>
+      </div>
+    </main>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

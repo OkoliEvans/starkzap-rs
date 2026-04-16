@@ -32,7 +32,7 @@ use starkzap_rs::{
     error::Result,
     signer::StarkSigner,
     tokens::{mainnet, sepolia},
-    wallet::DeployPolicy,
+    wallet::{StarknetProvider, Wallet},
 };
 
 // ── Amount unit tests (no network required) ───────────────────────────────────
@@ -107,8 +107,7 @@ fn token_by_symbol_case_insensitive() {
 fn network_rpc_urls_are_valid() {
     use starknet::providers::Url;
     for net in [Network::Mainnet, Network::Sepolia, Network::Devnet] {
-        Url::parse(net.default_rpc_url())
-            .unwrap_or_else(|_| panic!("Invalid URL for {:?}", net));
+        Url::parse(net.default_rpc_url()).unwrap_or_else(|_| panic!("Invalid URL for {:?}", net));
     }
 }
 
@@ -135,7 +134,7 @@ fn stark_signer_invalid_address_errors() {
 
 #[test]
 fn stark_signer_valid() {
-    // A valid (dummy) private key and address
+    // A valid (dummy) private key and address.
     let signer = StarkSigner::new(
         "0x02bbf4f9fd0bbb2e60b0316c1fe0b76cf7a4d0198bd493ced9b8df2a3a24d68b",
         "0x064b48806902a367c8598f4f95c305e8c1a1acba5f082d294a43793113115691",
@@ -145,8 +144,13 @@ fn stark_signer_valid() {
 
 // ── Live network tests (require RPC — gated by #[ignore]) ────────────────────
 
-/// Helper: build a test wallet pointing at Sepolia devnet or public RPC.
-async fn test_wallet() -> Result<starkzap_rs::wallet::Wallet> {
+/// Build a test wallet pointing at Sepolia devnet or the public RPC.
+///
+/// Returns the concrete `Wallet<StarknetProvider>` — no generics needed at
+/// call sites because `StarknetProvider` is a type alias for
+/// `JsonRpcClient<HttpTransport>`.
+async fn test_wallet() -> Result<Wallet<StarknetProvider>> {
+    dotenvy::dotenv().ok();
     let rpc = std::env::var("TEST_RPC_URL")
         .unwrap_or_else(|_| Network::Devnet.default_rpc_url().to_string());
 
@@ -155,8 +159,7 @@ async fn test_wallet() -> Result<starkzap_rs::wallet::Wallet> {
         rpc_url: Some(rpc),
     };
 
-    let pk = std::env::var("TEST_PRIVATE_KEY")
-        .expect("TEST_PRIVATE_KEY required for live tests");
+    let pk = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY required for live tests");
     let addr = std::env::var("TEST_ACCOUNT_ADDRESS")
         .expect("TEST_ACCOUNT_ADDRESS required for live tests");
 
@@ -170,9 +173,11 @@ async fn test_wallet() -> Result<starkzap_rs::wallet::Wallet> {
 async fn live_balance_query() {
     let wallet = test_wallet().await.expect("wallet setup failed");
     let strk = sepolia::strk();
-    let balance = wallet.balance_of(&strk).await.expect("balance query failed");
+    let balance = wallet
+        .balance_of(&strk)
+        .await
+        .expect("balance query failed");
     println!("Live STRK balance: {}", balance);
-    // Balance should be non-negative (is_zero is fine on a test account)
     assert!(balance.raw() < u128::MAX);
 }
 
@@ -190,8 +195,8 @@ async fn live_transfer_strk() {
     let wallet = test_wallet().await.expect("wallet setup failed");
     let strk = sepolia::strk();
 
-    let recipient = std::env::var("TEST_RECIPIENT_ADDRESS")
-        .expect("TEST_RECIPIENT_ADDRESS required");
+    let recipient =
+        std::env::var("TEST_RECIPIENT_ADDRESS").expect("TEST_RECIPIENT_ADDRESS required");
     let recipient_felt = Felt::from_hex(&recipient).expect("Invalid address");
 
     let amount = Amount::parse("0.001", &strk).unwrap();

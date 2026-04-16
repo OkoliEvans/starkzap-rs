@@ -53,6 +53,7 @@
 // ── Modules ───────────────────────────────────────────────────────────────────
 
 pub mod amount;
+pub mod account;
 pub mod error;
 pub mod network;
 pub mod paymaster;
@@ -66,8 +67,12 @@ pub mod wallet;
 // ── Re-exports: primary public API ───────────────────────────────────────────
 
 pub use amount::Amount;
+pub use account::AccountPreset;
 pub use error::{Result, StarkzapError};
 pub use network::Network;
 pub use sdk::{OnboardConfig, StarkZap, StarkZapConfig};
 pub use tx::{Tx, TxStatus};
-pub use wallet::{DeployPolicy, Recipient, Wallet};
+pub use wallet::{
+    DeployMode, DeployPolicy, EnsureReadyOptions, ExecuteOptions, PreflightOptions,
+    PreflightResult, ProgressEvent, ProgressStep, Recipient, Wallet,
+};

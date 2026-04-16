@@ -1,11 +1,28 @@
-//! Delegation pool entry and exit operations.
-//!
-//! All operations follow the Starknet native staking protocol:
-//! <https://docs.starknet.io/staking/>
+/// ```rust,no_run
+    /// # use starkzap_rs::{Amount, OnboardConfig, StarkZap, StarkZapConfig,
+    /// #     paymaster::FeeMode, signer::StarkSigner, staking::presets::mainnet_validators,
+    /// #     tokens::mainnet};
+    /// # async fn example() -> starkzap_rs::error::Result<()> {
+    /// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
+    /// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
+    /// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
+    /// let strk = mainnet::strk();
+    /// let validator = &mainnet_validators()[0];
+    /// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
+    /// let amount = Amount::parse("100", &strk)?;
+    ///
+    /// let tx = wallet
+    ///     .enter_pool(&strk, pool, amount, wallet.address(), FeeMode::UserPays)
+    ///     .await?;
+    /// tx.wait().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
 
 use starknet::{
     core::{types::Call, utils::get_selector_from_name},
     core::types::Felt,
+    providers::Provider,
 };
 
 use crate::{
@@ -17,7 +34,10 @@ use crate::{
     wallet::Wallet,
 };
 
-impl Wallet {
+impl<P> Wallet<P>
+where
+    P: Provider + Send + Sync + Clone + 'static,
+{
     /// Enter a delegation pool (stake tokens).
     ///
     /// This batches two calls atomically:
@@ -35,14 +55,24 @@ impl Wallet {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use starkzap_rs::{Amount, paymaster::FeeMode, staking::presets::mainnet_validators, tokens::mainnet};
-    ///
+    /// # use starkzap_rs::{Amount, OnboardConfig, StarkZap, StarkZapConfig,
+    /// #     paymaster::FeeMode, signer::StarkSigner, staking::presets::mainnet_validators,
+    /// #     tokens::mainnet};
+    /// # async fn example() -> starkzap_rs::error::Result<()> {
+    /// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
+    /// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
+    /// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
     /// let strk = mainnet::strk();
     /// let validator = &mainnet_validators()[0];
+    /// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
     /// let amount = Amount::parse("100", &strk)?;
     ///
-    /// let tx = wallet.enter_pool(&strk, validator.pool_address, amount, wallet.address(), FeeMode::UserPays).await?;
+    /// let tx = wallet
+    ///     .enter_pool(&strk, pool, amount, wallet.address(), FeeMode::UserPays)
+    ///     .await?;
     /// tx.wait().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn enter_pool(
         &self,
@@ -51,8 +81,12 @@ impl Wallet {
         amount: Amount,
         reward_address: Felt,
         fee_mode: FeeMode,
-    ) -> Result<Tx> {
+    ) -> Result<Tx<P>> {
         let [amount_low, amount_high] = amount.to_u256_felts();
+        let staking_amount = felt_to_u128(amount_low)?;
+        if amount_high != Felt::ZERO {
+            return Err(StarkzapError::AmountOverflow);
+        }
 
         let approve_call = approve_call(token.address, pool_contract, amount_low, amount_high)?;
 
@@ -62,7 +96,7 @@ impl Wallet {
         let enter_call = Call {
             to: pool_contract,
             selector: enter_selector,
-            calldata: vec![reward_address, amount_low, amount_high],
+            calldata: vec![reward_address, staking_amount],
         };
 
         self.execute(vec![approve_call, enter_call], fee_mode).await
@@ -79,8 +113,12 @@ impl Wallet {
         pool_contract: Felt,
         amount: Amount,
         fee_mode: FeeMode,
-    ) -> Result<Tx> {
+    ) -> Result<Tx<P>> {
         let [amount_low, amount_high] = amount.to_u256_felts();
+        let staking_amount = felt_to_u128(amount_low)?;
+        if amount_high != Felt::ZERO {
+            return Err(StarkzapError::AmountOverflow);
+        }
 
         let approve_call = approve_call(token.address, pool_contract, amount_low, amount_high)?;
 
@@ -90,7 +128,7 @@ impl Wallet {
         let add_call = Call {
             to: pool_contract,
             selector: add_selector,
-            calldata: vec![self.address, amount_low, amount_high],
+            calldata: vec![self.address, staking_amount],
         };
 
         self.execute(vec![approve_call, add_call], fee_mode).await
@@ -111,8 +149,12 @@ impl Wallet {
         pool_contract: Felt,
         amount: Amount,
         fee_mode: FeeMode,
-    ) -> Result<Tx> {
+    ) -> Result<Tx<P>> {
         let [amount_low, amount_high] = amount.to_u256_felts();
+        let staking_amount = felt_to_u128(amount_low)?;
+        if amount_high != Felt::ZERO {
+            return Err(StarkzapError::AmountOverflow);
+        }
 
         let selector = get_selector_from_name("exit_delegation_pool_intent")
             .map_err(|e| StarkzapError::Staking(e.to_string()))?;
@@ -120,7 +162,7 @@ impl Wallet {
         let call = Call {
             to: pool_contract,
             selector,
-            calldata: vec![amount_low, amount_high],
+            calldata: vec![staking_amount],
         };
 
         self.execute(vec![call], fee_mode).await
@@ -130,7 +172,7 @@ impl Wallet {
     ///
     /// Can only be called after [`exit_pool_intent`] and the cooldown has elapsed.
     /// Tokens are returned to the wallet.
-    pub async fn exit_pool(&self, pool_contract: Felt, fee_mode: FeeMode) -> Result<Tx> {
+    pub async fn exit_pool(&self, pool_contract: Felt, fee_mode: FeeMode) -> Result<Tx<P>> {
         let selector = get_selector_from_name("exit_delegation_pool_action")
             .map_err(|e| StarkzapError::Staking(e.to_string()))?;
 
@@ -160,4 +202,12 @@ fn approve_call(
         selector,
         calldata: vec![spender, amount_low, amount_high],
     })
+}
+
+fn felt_to_u128(value: Felt) -> Result<Felt> {
+    let raw: u128 = value
+        .to_biguint()
+        .try_into()
+        .map_err(|_| StarkzapError::AmountOverflow)?;
+    Ok(Felt::from(raw))
 }
