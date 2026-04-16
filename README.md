@@ -10,12 +10,12 @@ Built for the Starknet community.
 
 ```toml
 [dependencies]
-starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs" }
+starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs" }
 
 # Optional signers / helpers
-starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["privy"] }
-starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["cartridge"] }
-starkzap-rs = { git = "https://github.com/<your-org>/starkzap-rs", features = ["full"] }
+starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["privy"] }
+starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["cartridge"] }
+starkzap-rs = { git = "https://github.com/OkoliEvans/starkzap-rs", features = ["full"] }
 ```
 
 Once published to crates.io:
