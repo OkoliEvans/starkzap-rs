@@ -480,7 +480,7 @@ starknet-devnet --seed 0
 - [x] Auto account deploy
 - [x] Token/validator preset codegen
 - [x] WASM build verification
-- [ ] Published to crates.io
+- [x] Published to crates.io
 
 ---
 
