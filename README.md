@@ -13,12 +13,12 @@ Built for the Starknet community.
 
 ```toml
 [dependencies]
-starkzap-rs = "0.1.0"
+starkzap-rs = "0.1.1"
 
 # Optional signers / helpers
-starkzap-rs = { version = "0.1.0", features = ["privy"] }
-starkzap-rs = { version = "0.1.0", features = ["cartridge"] }
-starkzap-rs = { version = "0.1.0", features = ["full"] }
+starkzap-rs = { version = "0.1.1", features = ["privy"] }
+starkzap-rs = { version = "0.1.1", features = ["cartridge"] }
+starkzap-rs = { version = "0.1.1", features = ["full"] }
 ```
 
 Git install is still available if you want the latest repository version:
