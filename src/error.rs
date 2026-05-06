@@ -23,7 +23,9 @@ pub enum StarkzapError {
     #[error("Invalid address: {0}")]
     InvalidAddress(String),
 
-    #[error("Signer address is unavailable and could not be derived from the selected account preset")]
+    #[error(
+        "Signer address is unavailable and could not be derived from the selected account preset"
+    )]
     MissingSignerAddress,
 
     #[error("Signer public key is unavailable")]

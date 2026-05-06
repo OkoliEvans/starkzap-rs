@@ -11,12 +11,12 @@ use starknet::{
 use tracing::info;
 
 use crate::{
+    StarkzapError,
     account::AccountPreset,
     error::Result,
     network::Network,
     signer::{AnySigner, StarkSigner},
     wallet::{StarknetProvider, Wallet},
-    StarkzapError,
 };
 
 #[cfg(feature = "cartridge")]
@@ -53,16 +53,30 @@ pub struct StarkZapConfig {
 }
 
 impl StarkZapConfig {
+    pub fn new(network: Network) -> Self {
+        Self {
+            network,
+            rpc_url: None,
+        }
+    }
+
+    /// Build config from `STARKZAP_NETWORK`.
+    ///
+    /// Defaults to Sepolia when the env var is unset.
+    pub fn from_env() -> Self {
+        Self::new(Network::from_env())
+    }
+
     pub fn mainnet() -> Self {
-        Self { network: Network::Mainnet, rpc_url: None }
+        Self::new(Network::Mainnet)
     }
 
     pub fn sepolia() -> Self {
-        Self { network: Network::Sepolia, rpc_url: None }
+        Self::new(Network::Sepolia)
     }
 
     pub fn devnet() -> Self {
-        Self { network: Network::Devnet, rpc_url: None }
+        Self::new(Network::Devnet)
     }
 
     /// Override the RPC endpoint explicitly.
@@ -118,8 +132,7 @@ impl StarkZap {
     pub fn new(config: StarkZapConfig) -> Self {
         let rpc_url = config.resolve_rpc_url();
 
-        let url = Url::parse(&rpc_url)
-            .unwrap_or_else(|_| panic!("Invalid RPC URL: {}", rpc_url));
+        let url = Url::parse(&rpc_url).unwrap_or_else(|_| panic!("Invalid RPC URL: {}", rpc_url));
 
         let provider = Arc::new(JsonRpcClient::new(HttpTransport::new(url)));
 
@@ -153,7 +166,8 @@ impl StarkZap {
             }
             #[cfg(feature = "cartridge")]
             OnboardConfig::CartridgeWithPreset(signer, preset) => {
-                self.build_wallet(AnySigner::Cartridge(signer), preset).await
+                self.build_wallet(AnySigner::Cartridge(signer), preset)
+                    .await
             }
 
             #[cfg(feature = "privy")]
@@ -223,6 +237,7 @@ impl StarkZap {
             network: self.config.network,
             account_preset,
             rpc_url: self.rpc_url.clone(),
+            sponsored_deploy_lock: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -237,13 +252,19 @@ impl StarkZap {
             .get_class_hash_at(BlockId::Tag(BlockTag::Latest), address)
             .await
         {
-            Ok(class_hash) => Ok(AccountPreset::from_class_hash(class_hash).unwrap_or(requested_preset)),
-            Err(starknet::providers::ProviderError::StarknetError(StarknetError::ContractNotFound)) => {
-                self.infer_preset_from_signer_address(signer, address, requested_preset).await
+            Ok(class_hash) => {
+                Ok(AccountPreset::from_class_hash(class_hash).unwrap_or(requested_preset))
             }
-            Err(_) => self
-                .infer_preset_from_signer_address(signer, address, requested_preset)
-                .await,
+            Err(starknet::providers::ProviderError::StarknetError(
+                StarknetError::ContractNotFound,
+            )) => {
+                self.infer_preset_from_signer_address(signer, address, requested_preset)
+                    .await
+            }
+            Err(_) => {
+                self.infer_preset_from_signer_address(signer, address, requested_preset)
+                    .await
+            }
         }
     }
 

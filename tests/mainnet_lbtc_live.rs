@@ -184,7 +184,10 @@ async fn mainnet_smoke_lbtc_systems() {
 
     let amount = lbtc_amount();
     let transfer_tx = wallet
-        .transfer(&lbtc, vec![Recipient::new(recipient_felt(), amount.clone())])
+        .transfer(
+            &lbtc,
+            vec![Recipient::new(recipient_felt(), amount.clone())],
+        )
         .await
         .expect("transfer failed");
     println!("lbtc transfer tx: {}", transfer_tx);

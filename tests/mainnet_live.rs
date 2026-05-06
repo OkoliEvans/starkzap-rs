@@ -19,7 +19,10 @@
 //! - `RUN_MAINNET_STAKING_WRITES=1`
 //! - `MAINNET_STAKING_AMOUNT` (default `0.01`)
 
-use starknet::core::{types::{Call, Felt}, utils::get_selector_from_name};
+use starknet::core::{
+    types::{Call, Felt},
+    utils::get_selector_from_name,
+};
 use starkzap_rs::{
     Amount, OnboardConfig, StarkZap, StarkZapConfig, StarkzapError,
     paymaster::{FeeMode, PaymasterConfig},
@@ -181,7 +184,9 @@ async fn mainnet_staking_readonly() {
         .get_staker_pools(validator.staker_address)
         .await
         .expect("get_staker_pools failed");
-    let pool = pools.first().expect("validator should have at least one pool");
+    let pool = pools
+        .first()
+        .expect("validator should have at least one pool");
     let position = wallet
         .get_pool_position(pool.address, &strk)
         .await
@@ -212,13 +217,21 @@ async fn mainnet_staking_write_flow() {
         .get_staker_pools(validator.staker_address)
         .await
         .expect("get_staker_pools failed");
-    let pool = pools.first().expect("validator should have at least one pool");
+    let pool = pools
+        .first()
+        .expect("validator should have at least one pool");
 
     let amount_raw = std::env::var("MAINNET_STAKING_AMOUNT").unwrap_or_else(|_| "0.01".into());
     let amount = Amount::parse(&amount_raw, &strk).expect("invalid MAINNET_STAKING_AMOUNT");
 
     let stake_tx = wallet
-        .enter_pool(&strk, pool.address, amount, wallet.address(), FeeMode::UserPays)
+        .enter_pool(
+            &strk,
+            pool.address,
+            amount,
+            wallet.address(),
+            FeeMode::UserPays,
+        )
         .await
         .expect("enter_pool failed");
     println!("stake tx: {}", stake_tx);
@@ -277,7 +290,10 @@ async fn mainnet_smoke_strk_systems() {
     let amount_raw = std::env::var("MAINNET_TRANSFER_AMOUNT").unwrap_or_else(|_| "0.001".into());
     let amount = Amount::parse(&amount_raw, &strk).expect("invalid MAINNET_TRANSFER_AMOUNT");
     let transfer_tx = wallet
-        .transfer(&strk, vec![Recipient::new(recipient_felt(), amount.clone())])
+        .transfer(
+            &strk,
+            vec![Recipient::new(recipient_felt(), amount.clone())],
+        )
         .await
         .expect("transfer failed");
     println!("transfer tx: {}", transfer_tx);

@@ -10,7 +10,7 @@ use starknet::{
     providers::Provider,
 };
 use tokio::time::sleep;
-use tokio_stream::{wrappers::IntervalStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::IntervalStream};
 use tracing::{debug, warn};
 
 use crate::error::{Result, StarkzapError};
@@ -146,10 +146,10 @@ where
 /// Extract `ExecutionResult` from any `TransactionReceipt` variant.
 fn execution_result(receipt: &TransactionReceipt) -> &ExecutionResult {
     match receipt {
-        TransactionReceipt::Invoke(r)        => &r.execution_result,
-        TransactionReceipt::L1Handler(r)     => &r.execution_result,
-        TransactionReceipt::Declare(r)       => &r.execution_result,
-        TransactionReceipt::Deploy(r)        => &r.execution_result,
+        TransactionReceipt::Invoke(r) => &r.execution_result,
+        TransactionReceipt::L1Handler(r) => &r.execution_result,
+        TransactionReceipt::Declare(r) => &r.execution_result,
+        TransactionReceipt::Deploy(r) => &r.execution_result,
         TransactionReceipt::DeployAccount(r) => &r.execution_result,
     }
 }

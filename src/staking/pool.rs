@@ -1,27 +1,26 @@
 /// ```rust,no_run
-    /// # use starkzap_rs::{Amount, OnboardConfig, StarkZap, StarkZapConfig,
-    /// #     paymaster::FeeMode, signer::StarkSigner, staking::presets::mainnet_validators,
-    /// #     tokens::mainnet};
-    /// # async fn example() -> starkzap_rs::error::Result<()> {
-    /// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
-    /// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
-    /// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
-    /// let strk = mainnet::strk();
-    /// let validator = &mainnet_validators()[0];
-    /// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
-    /// let amount = Amount::parse("100", &strk)?;
-    ///
-    /// let tx = wallet
-    ///     .enter_pool(&strk, pool, amount, wallet.address(), FeeMode::UserPays)
-    ///     .await?;
-    /// tx.wait().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-
+/// # use starkzap_rs::{Amount, OnboardConfig, StarkZap, StarkZapConfig,
+/// #     paymaster::FeeMode, signer::StarkSigner, staking::presets::mainnet_validators,
+/// #     tokens::mainnet};
+/// # async fn example() -> starkzap_rs::error::Result<()> {
+/// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
+/// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
+/// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
+/// let strk = mainnet::strk();
+/// let validator = &mainnet_validators()[0];
+/// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
+/// let amount = Amount::parse("100", &strk)?;
+///
+/// let tx = wallet
+///     .enter_pool(&strk, pool, amount, wallet.address(), FeeMode::UserPays)
+///     .await?;
+/// tx.wait().await?;
+/// # Ok(())
+/// # }
+/// ```
 use starknet::{
-    core::{types::Call, utils::get_selector_from_name},
     core::types::Felt,
+    core::{types::Call, utils::get_selector_from_name},
     providers::Provider,
 };
 
@@ -194,8 +193,8 @@ fn approve_call(
     amount_low: Felt,
     amount_high: Felt,
 ) -> Result<Call> {
-    let selector = get_selector_from_name("approve")
-        .map_err(|e| StarkzapError::Staking(e.to_string()))?;
+    let selector =
+        get_selector_from_name("approve").map_err(|e| StarkzapError::Staking(e.to_string()))?;
 
     Ok(Call {
         to: token_address,

@@ -1,20 +1,19 @@
 /// ```rust,no_run
-    /// # use starkzap_rs::{OnboardConfig, StarkZap, StarkZapConfig,
-    /// #     signer::StarkSigner, staking::presets::mainnet_validators};
-    /// # async fn example() -> starkzap_rs::error::Result<()> {
-    /// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
-    /// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
-    /// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
-    /// let staker_addrs: Vec<_> = mainnet_validators()
-    ///     .into_iter()
-    ///     .map(|v| v.staker_address)
-    ///     .collect();
-    ///
-    /// let pools = wallet.discover_my_pools(staker_addrs).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    
+/// # use starkzap_rs::{OnboardConfig, StarkZap, StarkZapConfig,
+/// #     signer::StarkSigner, staking::presets::mainnet_validators};
+/// # async fn example() -> starkzap_rs::error::Result<()> {
+/// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
+/// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
+/// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
+/// let staker_addrs: Vec<_> = mainnet_validators()
+///     .into_iter()
+///     .map(|v| v.staker_address)
+///     .collect();
+///
+/// let pools = wallet.discover_my_pools(staker_addrs).await?;
+/// # Ok(())
+/// # }
+/// ```
 use starknet::{
     core::{
         types::{BlockId, BlockTag, Felt, FunctionCall},
@@ -46,7 +45,10 @@ where
     let mut attempts = 0usize;
 
     loop {
-        match provider.call(call.clone(), BlockId::Tag(BlockTag::Latest)).await {
+        match provider
+            .call(call.clone(), BlockId::Tag(BlockTag::Latest))
+            .await
+        {
             Ok(result) => return Ok(result),
             Err(error) if attempts < 2 && should_retry_provider_error(&error) => {
                 attempts += 1;
@@ -95,8 +97,8 @@ where
                 calldata: vec![staker_address],
             },
         )
-            .await
-            .map_err(StarkzapError::Provider)?;
+        .await
+        .map_err(StarkzapError::Provider)?;
 
         if result.is_empty() {
             return Err(StarkzapError::NoPoolsFound {
@@ -147,9 +149,9 @@ where
         let mut pools = Vec::with_capacity(len);
         for index in 0..len {
             let base = pools_start + (index * stride);
-            let address = *result.get(base).ok_or_else(|| StarkzapError::Staking(
-                "malformed staker_pool_info response".into(),
-            ))?;
+            let address = *result.get(base).ok_or_else(|| {
+                StarkzapError::Staking("malformed staker_pool_info response".into())
+            })?;
             pools.push(DiscoveredPool { address });
         }
 

@@ -47,11 +47,8 @@ fn main() {
     )
     .expect("failed to parse validator preset source");
 
-    fs::write(
-        out_dir.join("tokens_generated.rs"),
-        render_tokens(&tokens),
-    )
-    .expect("failed to write generated tokens");
+    fs::write(out_dir.join("tokens_generated.rs"), render_tokens(&tokens))
+        .expect("failed to write generated tokens");
     fs::write(
         out_dir.join("validators_generated.rs"),
         render_validators(&validators),

@@ -16,10 +16,13 @@
 //! # Ok::<(), starkzap_rs::StarkzapError>(())
 //! ```
 
-use std::fmt;
 use starknet::core::types::Felt;
+use std::fmt;
 
-use crate::{error::{Result, StarkzapError}, tokens::Token};
+use crate::{
+    error::{Result, StarkzapError},
+    tokens::Token,
+};
 
 /// A token amount held as a raw integer in the token's smallest unit.
 ///
@@ -117,7 +120,9 @@ fn parse_decimal(value: &str, decimals: u8) -> Result<u128> {
     let value = value.trim();
 
     if value.is_empty() {
-        return Err(StarkzapError::AmountParse { input: value.to_string() });
+        return Err(StarkzapError::AmountParse {
+            input: value.to_string(),
+        });
     }
 
     let (integer_part, fractional_part) = match value.split_once('.') {
@@ -126,9 +131,12 @@ fn parse_decimal(value: &str, decimals: u8) -> Result<u128> {
     };
 
     // Validate characters
-    if !integer_part.chars().all(|c| c.is_ascii_digit()) ||
-       !fractional_part.chars().all(|c| c.is_ascii_digit()) {
-        return Err(StarkzapError::AmountParse { input: value.to_string() });
+    if !integer_part.chars().all(|c| c.is_ascii_digit())
+        || !fractional_part.chars().all(|c| c.is_ascii_digit())
+    {
+        return Err(StarkzapError::AmountParse {
+            input: value.to_string(),
+        });
     }
 
     let dec = decimals as usize;
@@ -144,9 +152,11 @@ fn parse_decimal(value: &str, decimals: u8) -> Result<u128> {
     let int_val: u128 = if integer_part.is_empty() {
         0
     } else {
-        integer_part.parse::<u128>().map_err(|_| StarkzapError::AmountParse {
-            input: value.to_string(),
-        })?
+        integer_part
+            .parse::<u128>()
+            .map_err(|_| StarkzapError::AmountParse {
+                input: value.to_string(),
+            })?
     };
 
     let scale = 10u128
@@ -156,9 +166,11 @@ fn parse_decimal(value: &str, decimals: u8) -> Result<u128> {
     let frac_val: u128 = if frac_padded.is_empty() {
         0
     } else {
-        frac_padded.parse::<u128>().map_err(|_| StarkzapError::AmountParse {
-            input: value.to_string(),
-        })?
+        frac_padded
+            .parse::<u128>()
+            .map_err(|_| StarkzapError::AmountParse {
+                input: value.to_string(),
+            })?
     };
 
     int_val

@@ -184,7 +184,10 @@ async fn mainnet_smoke_wbtc_systems() {
 
     let amount = wbtc_amount();
     let transfer_tx = wallet
-        .transfer(&wbtc, vec![Recipient::new(recipient_felt(), amount.clone())])
+        .transfer(
+            &wbtc,
+            vec![Recipient::new(recipient_felt(), amount.clone())],
+        )
         .await
         .expect("transfer failed");
     println!("wbtc transfer tx: {}", transfer_tx);

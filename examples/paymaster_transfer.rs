@@ -15,10 +15,10 @@
 //! ```
 
 use dotenvy::dotenv;
-use starknet::core::{types::{Call, Felt}, utils::get_selector_from_name};
+use starknet::core::types::Felt;
 use starkzap_rs::{
-    Amount, OnboardConfig, StarkZap, StarkZapConfig,
-    paymaster::{FeeMode, PaymasterConfig, PaymasterDetails},
+    Amount, ExecuteOptions, OnboardConfig, Recipient, StarkZap, StarkZapConfig,
+    paymaster::{FeeMode, PaymasterConfig},
     signer::StarkSigner,
     tokens::sepolia,
 };
@@ -52,53 +52,28 @@ async fn main() -> starkzap_rs::error::Result<()> {
         Felt::from_hex(&std::env::var("RECIPIENT_ADDRESS").expect("RECIPIENT_ADDRESS not set"))
             .expect("Invalid RECIPIENT_ADDRESS");
 
-    // ── Build the call ────────────────────────────────────────────────────────
+    // ── Execute with paymaster ────────────────────────────────────────────────
     //
-    // Transfer 0.001 STRK via the ERC-20 `transfer` entrypoint.
-    // wallet.execute accepts any Vec<Call>, so you can batch multiple
-    // token transfers or arbitrary contract calls in a single gasless tx.
+    // `transfer_with_options` mirrors the StarkZap TS transfer API:
+    // the SDK formats the ERC-20 u256 amount, builds the transfer call,
+    // and routes execution according to the supplied fee mode.
     let strk = sepolia::strk();
     let amount = Amount::parse("0.001", &strk)?;
-    let [low, high] = amount.to_u256_felts();
-
-    let calls = vec![Call {
-        to: strk.address,
-        selector: get_selector_from_name("transfer").unwrap(),
-        calldata: vec![recipient, low, high],
-    }];
 
     info!("Gasless transfer of {} to {:#x}", amount, recipient);
-
-    // ── Execute with paymaster ────────────────────────────────────────────────
-    let tx = wallet.execute(calls, FeeMode::Paymaster(pm_config)).await?;
+    let tx = wallet
+        .transfer_with_options(
+            &strk,
+            vec![Recipient::new(recipient, amount)],
+            ExecuteOptions {
+                fee_mode: Some(FeeMode::Paymaster(pm_config)),
+            },
+        )
+        .await?;
 
     info!("Tx submitted: {}", tx);
     let receipt = tx.wait().await?;
     info!("Confirmed in block: {:?}", receipt.block.block_hash());
-
-    // TS-style explicit API is also available. Opt in with:
-    //   PAYMASTER_BUILD_ONLY=1 cargo run --example paymaster_transfer
-    //
-    // Some account classes can execute via the fallback path above but still
-    // reject explicit sponsored build requests, so we keep this as an optional
-    // demonstration instead of running it unconditionally.
-    let build_only = std::env::var("PAYMASTER_BUILD_ONLY")
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if build_only {
-        let _ = wallet
-            .build_paymaster_transaction(
-                vec![Call {
-                    to: strk.address,
-                    selector: get_selector_from_name("transfer").unwrap(),
-                    calldata: vec![recipient, low, high],
-                }],
-                PaymasterDetails::sponsored(),
-                std::env::var("AVNU_API_KEY").ok(),
-            )
-            .await?;
-    }
 
     Ok(())
 }

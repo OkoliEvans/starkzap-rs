@@ -23,11 +23,8 @@
 use dotenvy::dotenv;
 use starknet::core::types::Felt;
 use starkzap_rs::{
-    Amount, OnboardConfig, StarkZap, StarkZapConfig,
-    paymaster::FeeMode,
-    signer::StarkSigner,
-    staking::presets::sepolia_validators,
-    tokens::sepolia,
+    Amount, OnboardConfig, StarkZap, StarkZapConfig, paymaster::FeeMode, signer::StarkSigner,
+    staking::presets::sepolia_validators, tokens::sepolia,
 };
 use tracing::info;
 
@@ -73,6 +70,7 @@ async fn main() -> starkzap_rs::error::Result<()> {
 
     // ── 2. Check position ─────────────────────────────────────────────────────
     let pos = wallet.get_pool_position(pool, &strk).await?;
+    info!("Pool member: {}", pos.is_member);
     info!("Staked:  {}", pos.staked);
     info!("Rewards: {}", pos.rewards);
 
@@ -87,10 +85,18 @@ async fn main() -> starkzap_rs::error::Result<()> {
     let stake_amount = Amount::parse("10", &strk)?;
     info!("Staking {}", stake_amount);
 
-    let reward_address = wallet.address(); // rewards sent to self
-    let tx = wallet
-        .enter_pool(&strk, pool, stake_amount, reward_address, FeeMode::UserPays)
-        .await?;
+    let tx = if pos.can_add_to_pool() {
+        info!("Existing pool member; using add_to_delegation_pool");
+        wallet
+            .add_to_pool(&strk, pool, stake_amount, FeeMode::UserPays)
+            .await?
+    } else {
+        info!("First pool entry; using enter_delegation_pool");
+        let reward_address = wallet.address(); // rewards sent to self
+        wallet
+            .enter_pool(&strk, pool, stake_amount, reward_address, FeeMode::UserPays)
+            .await?
+    };
     info!("Stake tx submitted: {}", tx);
     tx.wait().await?;
     info!("Stake confirmed ✓");
@@ -111,7 +117,7 @@ async fn main() -> starkzap_rs::error::Result<()> {
 
     // ── 5. Signal exit intent ─────────────────────────────────────────────────
     if !pos.staked.is_zero() {
-        info!("Signalling exit intent for {} STRK", pos.staked);
+        info!("Signalling exit intent for {}", pos.staked);
         let tx = wallet
             .exit_pool_intent(pool, pos.staked, FeeMode::UserPays)
             .await?;

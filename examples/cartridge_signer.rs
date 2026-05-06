@@ -44,12 +44,11 @@ fn main() {
 #[tokio::main]
 async fn main() -> starkzap_rs::error::Result<()> {
     use dotenvy::dotenv;
+    use starknet::core::types::Felt;
     use starkzap_rs::{
-        Amount, OnboardConfig, Recipient, StarkZap, StarkZapConfig,
-        signer::CartridgeSigner,
+        Amount, OnboardConfig, Recipient, StarkZap, StarkZapConfig, signer::CartridgeSigner,
         tokens::sepolia,
     };
-    use starknet::core::types::Felt;
     use tracing::info;
 
     dotenv().ok();
@@ -82,15 +81,17 @@ async fn main() -> starkzap_rs::error::Result<()> {
         .unwrap_or(false);
 
     if should_transfer {
-        let recipient_hex = std::env::var("RECIPIENT_ADDRESS")
-            .expect("RECIPIENT_ADDRESS not set");
+        let recipient_hex = std::env::var("RECIPIENT_ADDRESS").expect("RECIPIENT_ADDRESS not set");
         let recipient = Felt::from_hex(&recipient_hex).expect("Invalid RECIPIENT_ADDRESS");
         let amount = Amount::parse(
             &std::env::var("CARTRIDGE_TRANSFER_AMOUNT").unwrap_or_else(|_| "0.001".into()),
             &strk,
         )?;
 
-        info!("Attempting policy-approved transfer of {} to {}", amount, recipient_hex);
+        info!(
+            "Attempting policy-approved transfer of {} to {}",
+            amount, recipient_hex
+        );
         let tx = wallet
             .transfer(&strk, vec![Recipient::new(recipient, amount)])
             .await?;
@@ -99,7 +100,9 @@ async fn main() -> starkzap_rs::error::Result<()> {
         let receipt = tx.wait().await?;
         info!("Confirmed in block {}", receipt.block.block_number());
     } else {
-        info!("Session key signer is ready. Set CARTRIDGE_RUN_TRANSFER=1 to test a real policy-approved transfer.");
+        info!(
+            "Session key signer is ready. Set CARTRIDGE_RUN_TRANSFER=1 to test a real policy-approved transfer."
+        );
     }
 
     Ok(())

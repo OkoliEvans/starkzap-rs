@@ -64,7 +64,11 @@ impl AccountPreset {
 
     pub fn salt(&self, public_key: Felt) -> Felt {
         match self {
-            Self::Devnet | Self::OpenZeppelin | Self::Argent | Self::Braavos | Self::ArgentXV050 => public_key,
+            Self::Devnet
+            | Self::OpenZeppelin
+            | Self::Argent
+            | Self::Braavos
+            | Self::ArgentXV050 => public_key,
         }
     }
 
@@ -183,7 +187,8 @@ where
     }
 
     fn is_signer_interactive(&self) -> bool {
-        self.signer.is_interactive(SignerInteractivityContext::Other)
+        self.signer
+            .is_interactive(SignerInteractivityContext::Other)
     }
 
     fn block_id(&self) -> BlockId {

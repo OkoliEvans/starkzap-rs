@@ -52,8 +52,8 @@
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 
-pub mod amount;
 pub mod account;
+pub mod amount;
 pub mod error;
 pub mod network;
 pub mod paymaster;
@@ -66,8 +66,8 @@ pub mod wallet;
 
 // ── Re-exports: primary public API ───────────────────────────────────────────
 
-pub use amount::Amount;
 pub use account::AccountPreset;
+pub use amount::Amount;
 pub use error::{Result, StarkzapError};
 pub use network::Network;
 pub use sdk::{OnboardConfig, StarkZap, StarkZapConfig};

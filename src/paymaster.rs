@@ -8,10 +8,13 @@
 //! The backend implementation mirrors StarkZap TS by speaking to AVNU's
 //! paymaster JSON-RPC endpoint (`PaymasterRpc` / SNIP-29 style).
 
-use reqwest::{Client, header::{CONTENT_TYPE, HeaderMap, HeaderValue}};
+use reqwest::{
+    Client,
+    header::{CONTENT_TYPE, HeaderMap, HeaderValue},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use starknet::core::types::{typed_data::TypeReference, Call, Felt, TypedData};
+use starknet::core::types::{Call, Felt, TypedData, typed_data::TypeReference};
 use starknet_crypto::poseidon_hash_many;
 use tracing::trace;
 
@@ -206,6 +209,7 @@ enum PaymasterTransactionType {
 }
 
 const PAYMASTER_RPC_VERSION: &str = "0x1";
+const PAYMASTER_DEPLOYMENT_VERSION: u8 = 1;
 
 // ── AVNU paymaster JSON-RPC request/response shapes ──────────────────────────
 
@@ -273,7 +277,7 @@ struct AccountDeploymentPayload {
     class_hash: String,
     salt: String,
     calldata: Vec<String>,
-    version: &'static str,
+    version: u8,
 }
 
 #[derive(Serialize)]
@@ -288,9 +292,7 @@ struct ExecutionParameters {
 #[serde(tag = "mode", rename_all = "snake_case")]
 enum PaymasterRpcFeeMode {
     Sponsored,
-    Default {
-        gas_token: String,
-    },
+    Default { gas_token: String },
 }
 
 #[derive(Serialize)]
@@ -369,9 +371,7 @@ impl PaymasterClient {
             parameters: serialize_execution_parameters(&details),
         };
 
-        let response = self
-            .rpc("paymaster_buildTransaction", &request)
-            .await?;
+        let response = self.rpc("paymaster_buildTransaction", &request).await?;
         let transaction_type = match response
             .get("type")
             .and_then(Value::as_str)
@@ -380,18 +380,16 @@ impl PaymasterClient {
             "deploy_and_invoke" => PaymasterTransactionType::DeployAndInvoke,
             _ => PaymasterTransactionType::Invoke,
         };
-        let typed_data = response
-            .get("typed_data")
-            .cloned()
-            .ok_or_else(|| StarkzapError::PaymasterMalformed {
+        let typed_data = response.get("typed_data").cloned().ok_or_else(|| {
+            StarkzapError::PaymasterMalformed {
                 field: "result.typed_data".into(),
-            })?;
-        let execution_parameters = response
-            .get("parameters")
-            .cloned()
-            .ok_or_else(|| StarkzapError::PaymasterMalformed {
+            }
+        })?;
+        let execution_parameters = response.get("parameters").cloned().ok_or_else(|| {
+            StarkzapError::PaymasterMalformed {
                 field: "result.parameters".into(),
-            })?;
+            }
+        })?;
         let deployment_payload = response.get("deployment").cloned();
         let typed_data_hash = hash_typed_data(&typed_data, account_address)?;
 
@@ -409,7 +407,9 @@ impl PaymasterClient {
     fn validate_details(&self, details: &PaymasterDetails) -> Result<()> {
         if details.max_fee_in_gas_token.is_some() {
             return Err(StarkzapError::PaymasterUnsupported {
-                feature: "max_fee_in_gas_token is not yet supported by the current paymaster transport".into(),
+                feature:
+                    "max_fee_in_gas_token is not yet supported by the current paymaster transport"
+                        .into(),
             });
         }
 
@@ -430,7 +430,10 @@ impl PaymasterClient {
         let invoke = ExecutableInvokeTransaction {
             user_address: format!("{:#x}", account_address),
             typed_data: prepared.typed_data,
-            signature: signature.iter().map(|felt| format!("{:#x}", felt)).collect(),
+            signature: signature
+                .iter()
+                .map(|felt| format!("{:#x}", felt))
+                .collect(),
         };
         let transaction = match (prepared.transaction_type, prepared.deployment_payload) {
             (PaymasterTransactionType::Invoke, _) => Ok(json!({
@@ -442,23 +445,22 @@ impl PaymasterClient {
                 "deployment": deployment,
                 "invoke": invoke,
             })),
-            (PaymasterTransactionType::DeployAndInvoke, None) => Err(
-                StarkzapError::PaymasterMalformed {
+            (PaymasterTransactionType::DeployAndInvoke, None) => {
+                Err(StarkzapError::PaymasterMalformed {
                     field: "missing deployment payload for deploy_and_invoke transaction".into(),
-                },
-            ),
+                })
+            }
         }?;
         let request = json!({
             "transaction": transaction,
             "parameters": prepared.execution_parameters,
         });
 
-        let response: ExecuteResponse = serde_json::from_value(
-            self.rpc("paymaster_executeTransaction", &request).await?,
-        )
-        .map_err(|e| StarkzapError::PaymasterMalformed {
-            field: e.to_string(),
-        })?;
+        let response: ExecuteResponse =
+            serde_json::from_value(self.rpc("paymaster_executeTransaction", &request).await?)
+                .map_err(|e| StarkzapError::PaymasterMalformed {
+                    field: e.to_string(),
+                })?;
 
         Felt::from_hex(&response.transaction_hash).map_err(|_| StarkzapError::PaymasterMalformed {
             field: format!("invalid transaction hash: {}", response.transaction_hash),
@@ -477,10 +479,18 @@ impl PaymasterClient {
             params: Some(params),
         };
 
-        let response = self.client.post(&self.base_url).json(&request).send().await?;
+        let response = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await?;
         let status = response.status().as_u16();
         let text = response.text().await.unwrap_or_default();
-        trace!("paymaster {} {} -> HTTP {} body: {}", self.base_url, method, status, text);
+        trace!(
+            "paymaster {} {} -> HTTP {} body: {}",
+            self.base_url, method, status, text
+        );
 
         if !(200..=299).contains(&(status as usize)) {
             return Err(StarkzapError::PaymasterRequest { status, body: text });
@@ -503,18 +513,24 @@ impl PaymasterClient {
             });
         }
 
-        body.result.ok_or_else(|| StarkzapError::PaymasterMalformed {
-            field: format!("missing result for method {method}"),
-        })
+        body.result
+            .ok_or_else(|| StarkzapError::PaymasterMalformed {
+                field: format!("missing result for method {method}"),
+            })
     }
 }
 
 fn serialize_calls(calls: &[Call]) -> Vec<AvnuCall> {
-    calls.iter()
+    calls
+        .iter()
         .map(|call| AvnuCall {
             to: format!("{:#x}", call.to),
             selector: format!("{:#x}", call.selector),
-            calldata: call.calldata.iter().map(|felt| format!("{:#x}", felt)).collect(),
+            calldata: call
+                .calldata
+                .iter()
+                .map(|felt| format!("{:#x}", felt))
+                .collect(),
         })
         .collect()
 }
@@ -549,15 +565,16 @@ fn serialize_deployment_data(data: &AccountDeploymentData) -> AccountDeploymentP
             .iter()
             .map(|felt| format!("{:#x}", felt))
             .collect(),
-        version: "0x1",
+        version: PAYMASTER_DEPLOYMENT_VERSION,
     }
 }
 
 pub(crate) fn hash_typed_data(typed_data: &Value, account_address: Felt) -> Result<Felt> {
-    let typed_data: TypedData =
-        serde_json::from_value(typed_data.clone()).map_err(|e| StarkzapError::PaymasterMalformed {
+    let typed_data: TypedData = serde_json::from_value(typed_data.clone()).map_err(|e| {
+        StarkzapError::PaymasterMalformed {
             field: format!("cannot deserialize typed data: {}", e),
-        })?;
+        }
+    })?;
 
     if is_outside_execution_typed_data(&typed_data) {
         return hash_outside_execution_typed_data(typed_data, account_address);
@@ -574,10 +591,7 @@ fn is_outside_execution_typed_data(typed_data: &TypedData) -> bool {
     typed_data.primary_type().signature_ref_repr() == "OutsideExecution"
 }
 
-fn hash_outside_execution_typed_data(
-    typed_data: TypedData,
-    account_address: Felt,
-) -> Result<Felt> {
+fn hash_outside_execution_typed_data(typed_data: TypedData, account_address: Felt) -> Result<Felt> {
     const STARKNET_MESSAGE_PREFIX: Felt = Felt::from_raw([
         257012186512350467,
         18446744073709551605,
@@ -626,9 +640,7 @@ fn hash_outside_execution_typed_data(
     ]))
 }
 
-fn hash_outside_execution_call(
-    value: &starknet::core::types::typed_data::Value,
-) -> Result<Felt> {
+fn hash_outside_execution_call(value: &starknet::core::types::typed_data::Value) -> Result<Felt> {
     const CALL_TYPE_HASH: Felt = Felt::from_hex_unchecked(
         "0x3635c7f2a7ba93844c0d064e18e487f35ab90f7c39d00f186a781fc3f0c2ca9",
     );
@@ -661,9 +673,12 @@ fn object_field_felt(
     object: &starknet::core::types::typed_data::ObjectValue,
     name: &str,
 ) -> Result<Felt> {
-    let value = object.fields.get(name).ok_or_else(|| StarkzapError::PaymasterMalformed {
-        field: format!("typed_data.message.{name}"),
-    })?;
+    let value = object
+        .fields
+        .get(name)
+        .ok_or_else(|| StarkzapError::PaymasterMalformed {
+            field: format!("typed_data.message.{name}"),
+        })?;
     value_to_felt(value)
 }
 
@@ -671,9 +686,12 @@ fn object_field_array<'a>(
     object: &'a starknet::core::types::typed_data::ObjectValue,
     name: &str,
 ) -> Result<&'a [starknet::core::types::typed_data::Value]> {
-    let value = object.fields.get(name).ok_or_else(|| StarkzapError::PaymasterMalformed {
-        field: format!("typed_data.message.{name}"),
-    })?;
+    let value = object
+        .fields
+        .get(name)
+        .ok_or_else(|| StarkzapError::PaymasterMalformed {
+            field: format!("typed_data.message.{name}"),
+        })?;
 
     match value {
         starknet::core::types::typed_data::Value::Array(array) => Ok(&array.elements),
@@ -700,8 +718,37 @@ fn value_to_felt(value: &starknet::core::types::typed_data::Value) -> Result<Fel
 #[cfg(test)]
 mod tests {
     use super::hash_typed_data;
+    use super::{
+        AccountDeploymentData, PAYMASTER_DEPLOYMENT_VERSION, PAYMASTER_RPC_VERSION,
+        PaymasterDetails, serialize_deployment_data, serialize_execution_parameters,
+    };
     use serde_json::json;
     use starknet::core::types::Felt;
+
+    #[test]
+    fn paymaster_execution_parameters_serialize_rpc_version_string() {
+        let value = serde_json::to_value(serialize_execution_parameters(
+            &PaymasterDetails::sponsored(),
+        ))
+        .unwrap();
+
+        assert_eq!(value["version"], json!(PAYMASTER_RPC_VERSION));
+        assert!(value["version"].is_string());
+    }
+
+    #[test]
+    fn paymaster_deployment_data_serializes_numeric_version() {
+        let value = serde_json::to_value(serialize_deployment_data(&AccountDeploymentData::new(
+            Felt::from_hex_unchecked("0x1"),
+            Felt::from_hex_unchecked("0x2"),
+            Felt::from_hex_unchecked("0x3"),
+            vec![Felt::from_hex_unchecked("0x4")],
+        )))
+        .unwrap();
+
+        assert_eq!(value["version"], json!(PAYMASTER_DEPLOYMENT_VERSION));
+        assert!(value["version"].is_number());
+    }
 
     #[test]
     fn paymaster_outside_execution_hash_matches_starknet_js() {

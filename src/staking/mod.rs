@@ -48,6 +48,6 @@ pub mod pool;
 pub mod presets;
 pub mod rewards;
 
-pub use presets::{mainnet_validators, sepolia_validators, Validator};
-pub use rewards::PoolPosition;
 pub use discovery::DiscoveredPool;
+pub use presets::{Validator, mainnet_validators, sepolia_validators};
+pub use rewards::PoolPosition;

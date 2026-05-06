@@ -41,8 +41,8 @@ impl StarkSigner {
     /// Construct from a 0x-prefixed hex private key and infer the counterfactual
     /// address later from an account preset.
     pub fn from_private_key(private_key_hex: &str) -> Result<Self> {
-        let pk_felt = Felt::from_hex(private_key_hex)
-            .map_err(|_| StarkzapError::InvalidPrivateKey)?;
+        let pk_felt =
+            Felt::from_hex(private_key_hex).map_err(|_| StarkzapError::InvalidPrivateKey)?;
 
         let signing_key = SigningKey::from_secret_scalar(pk_felt);
         let public_key = signing_key.verifying_key().scalar();

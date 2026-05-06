@@ -76,8 +76,8 @@ pub struct CartridgeSigner {
 impl CartridgeSigner {
     /// Construct from a full session bundle exported from the browser flow.
     pub fn from_session_bundle(session: CartridgeSessionBundle) -> Result<Self> {
-        let pk_felt =
-            Felt::from_hex(&session.signer.priv_key).map_err(|_| StarkzapError::InvalidPrivateKey)?;
+        let pk_felt = Felt::from_hex(&session.signer.priv_key)
+            .map_err(|_| StarkzapError::InvalidPrivateKey)?;
         let address = Felt::from_hex(&session.session.address)
             .map_err(|_| StarkzapError::InvalidAddress(session.session.address.clone()))?;
 
@@ -153,7 +153,9 @@ impl CartridgeSigner {
             .arg(bundle_json)
             .arg(calls_json)
             .output()
-            .map_err(|e| StarkzapError::Cartridge(format!("failed to launch Cartridge helper: {e}")))?;
+            .map_err(|e| {
+                StarkzapError::Cartridge(format!("failed to launch Cartridge helper: {e}"))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -173,7 +175,9 @@ impl CartridgeSigner {
         let hash = value
             .get("transaction_hash")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| StarkzapError::Cartridge("helper returned no transaction_hash".into()))?;
+            .ok_or_else(|| {
+                StarkzapError::Cartridge("helper returned no transaction_hash".into())
+            })?;
 
         Felt::from_hex(hash)
             .map_err(|_| StarkzapError::Cartridge(format!("invalid transaction hash: {hash}")))

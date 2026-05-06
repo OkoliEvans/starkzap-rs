@@ -17,6 +17,7 @@ use starknet::{
     providers::{JsonRpcClient, Provider, jsonrpc::HttpTransport},
     signers::Signer,
 };
+use tokio::sync::Mutex;
 use tracing::{debug, info};
 
 use crate::{
@@ -155,6 +156,7 @@ where
     pub(crate) network: Network,
     pub(crate) account_preset: AccountPreset,
     pub(crate) rpc_url: String,
+    pub(crate) sponsored_deploy_lock: Arc<Mutex<()>>,
 }
 
 impl<P> Wallet<P>
@@ -287,6 +289,23 @@ where
 
     /// Transfer tokens to one or more recipients in a single multicall.
     pub async fn transfer(&self, token: &Token, recipients: Vec<Recipient>) -> Result<Tx<P>> {
+        self.transfer_with_options(
+            token,
+            recipients,
+            ExecuteOptions {
+                fee_mode: Some(FeeMode::UserPays),
+            },
+        )
+        .await
+    }
+
+    /// Transfer tokens with explicit execution options.
+    pub async fn transfer_with_options(
+        &self,
+        token: &Token,
+        recipients: Vec<Recipient>,
+        options: ExecuteOptions,
+    ) -> Result<Tx<P>> {
         if recipients.is_empty() {
             return Err(StarkzapError::Other("No recipients provided".into()));
         }
@@ -306,7 +325,7 @@ where
             })
             .collect();
 
-        self.execute(calls, FeeMode::UserPays).await
+        self.execute_with_options(calls, options).await
     }
 
     /// Execute a raw list of Starknet calls atomically.
@@ -336,7 +355,8 @@ where
                 debug!("Executing {} call(s) with user-pays fee", calls.len());
                 #[cfg(feature = "cartridge")]
                 if let AnySigner::Cartridge(signer) = self.signer.as_ref() {
-                    let calls_json = crate::signer::cartridge_signer::calls_to_cartridge_json(&calls)?;
+                    let calls_json =
+                        crate::signer::cartridge_signer::calls_to_cartridge_json(&calls)?;
                     signer.execute_via_session(&calls_json)?
                 } else if self.account_preset.requires_invoke_v1() {
                     self.execute_user_pays_v1(calls).await?
@@ -366,7 +386,7 @@ where
             FeeMode::Paymaster(config) => {
                 debug!("Executing {} call(s) via paymaster", calls.len());
                 match self
-                    .execute_paymaster_transaction(calls.clone(), config.details(), config.api_key.clone())
+                    .execute_sponsored_paymaster(calls.clone(), &config)
                     .await
                 {
                     Ok(hash) => hash,
@@ -402,6 +422,49 @@ where
         Ok(Tx::new(hash, Arc::clone(&self.provider)))
     }
 
+    async fn execute_sponsored_paymaster(
+        &self,
+        calls: Vec<Call>,
+        config: &crate::paymaster::PaymasterConfig,
+    ) -> Result<Felt> {
+        if self.is_deployed().await? {
+            return self
+                .execute_paymaster_invoke_transaction(
+                    calls,
+                    config.details(),
+                    config.api_key.clone(),
+                )
+                .await;
+        }
+
+        let _lock = self.sponsored_deploy_lock.lock().await;
+        if self.is_deployed().await? {
+            return self
+                .execute_paymaster_invoke_transaction(
+                    calls,
+                    config.details(),
+                    config.api_key.clone(),
+                )
+                .await;
+        }
+
+        match self
+            .execute_paymaster_transaction(calls.clone(), config.details(), config.api_key.clone())
+            .await
+        {
+            Ok(hash) => Ok(hash),
+            Err(error) if is_already_deployed_error(&error.to_string()) => {
+                self.execute_paymaster_invoke_transaction(
+                    calls,
+                    config.details(),
+                    config.api_key.clone(),
+                )
+                .await
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Simulate whether a transaction would succeed without sending it.
     ///
     /// Routes to v1 or v3 simulation based on the account preset so that
@@ -428,7 +491,11 @@ where
             };
         }
 
-        let simulation = self.account.execute_v3(options.calls).simulate(false, false).await;
+        let simulation = self
+            .account
+            .execute_v3(options.calls)
+            .simulate(false, false)
+            .await;
 
         match simulation {
             Ok(simulated) => {
@@ -480,9 +547,7 @@ where
         }
 
         let client = PaymasterClient::new(&self.network, api_key);
-        client
-            .build_transaction(self.address, calls, details)
-            .await
+        client.build_transaction(self.address, calls, details).await
     }
 
     /// Execute a paymaster-backed transaction, mirroring the TS SDK flow.
@@ -498,6 +563,29 @@ where
         let signer = Arc::clone(&self.signer);
 
         PaymasterClient::new(&self.network, api_key)
+            .execute_prepared(self.address, prepared, |hash| async move {
+                let sig = signer
+                    .sign_hash(&hash)
+                    .await
+                    .map_err(|e| StarkzapError::Signer(e.to_string()))?;
+                Ok(vec![sig.r, sig.s])
+            })
+            .await
+    }
+
+    async fn execute_paymaster_invoke_transaction(
+        &self,
+        calls: Vec<Call>,
+        details: PaymasterDetails,
+        api_key: Option<String>,
+    ) -> Result<Felt> {
+        let client = PaymasterClient::new(&self.network, api_key);
+        let prepared = client
+            .build_transaction(self.address, calls, details)
+            .await?;
+        let signer = Arc::clone(&self.signer);
+
+        client
             .execute_prepared(self.address, prepared, |hash| async move {
                 let sig = signer
                     .sign_hash(&hash)
@@ -557,11 +645,7 @@ where
         let fee_estimate = self
             .raw_rpc(
                 "starknet_estimateFee",
-                json!([
-                    [estimate_request],
-                    [],
-                    "latest"
-                ]),
+                json!([[estimate_request], [], "latest"]),
             )
             .await?;
 
@@ -570,16 +654,18 @@ where
             .and_then(|items| items.first())
             .cloned()
             .unwrap_or(fee_estimate);
-        let overall_fee_hex = fee_estimate["overall_fee"]
-            .as_str()
-            .ok_or_else(|| StarkzapError::PaymasterMalformed {
+        let overall_fee_hex = fee_estimate["overall_fee"].as_str().ok_or_else(|| {
+            StarkzapError::PaymasterMalformed {
                 field: "overall_fee".into(),
-            })?;
+            }
+        })?;
         let overall_fee = Felt::from_hex(overall_fee_hex)
             .map_err(|_| StarkzapError::Other(format!("invalid overall_fee: {overall_fee_hex}")))?;
         let overall_fee_bytes = overall_fee.to_bytes_le();
         if overall_fee_bytes.iter().skip(8).any(|&byte| byte != 0) {
-            return Err(StarkzapError::Account("estimated max_fee exceeds u64".into()));
+            return Err(StarkzapError::Account(
+                "estimated max_fee exceeds u64".into(),
+            ));
         }
         let overall_fee = u64::from_le_bytes(overall_fee_bytes[..8].try_into().unwrap());
         let max_fee = Felt::from((overall_fee as f64 * 1.1) as u64);
@@ -592,17 +678,14 @@ where
         // starknet_addInvokeTransaction params are also positional:
         //   [0] invoke_transaction — the broadcasted invoke txn object
         let result = self
-            .raw_rpc(
-                "starknet_addInvokeTransaction",
-                json!([request]),
-            )
+            .raw_rpc("starknet_addInvokeTransaction", json!([request]))
             .await?;
 
-        let hash_hex = result["transaction_hash"]
-            .as_str()
-            .ok_or_else(|| StarkzapError::PaymasterMalformed {
+        let hash_hex = result["transaction_hash"].as_str().ok_or_else(|| {
+            StarkzapError::PaymasterMalformed {
                 field: "transaction_hash".into(),
-            })?;
+            }
+        })?;
 
         Felt::from_hex(hash_hex)
             .map_err(|_| StarkzapError::Other(format!("invalid transaction hash: {hash_hex}")))
@@ -624,11 +707,7 @@ where
         // Same positional-array params as execute_user_pays_v1.
         self.raw_rpc(
             "starknet_estimateFee",
-            json!([
-                [estimate_request],
-                [],
-                "latest"
-            ]),
+            json!([[estimate_request], [], "latest"]),
         )
         .await?;
 
@@ -760,7 +839,8 @@ where
             )));
         }
 
-        value.get("result")
+        value
+            .get("result")
             .cloned()
             .ok_or_else(|| StarkzapError::Other(format!("RPC {method} returned no result")))
     }
@@ -820,6 +900,13 @@ fn is_paymaster_compatibility_error(message: &str) -> bool {
         || lower.contains("src9")
         || lower.contains("outside execution")
         || lower.contains("not compatible")
+}
+
+fn is_already_deployed_error(message: &str) -> bool {
+    let message = message.to_lowercase();
+    message.contains("already deployed")
+        || message.contains("account already exists")
+        || message.contains("contract already exists")
 }
 
 impl<P> std::fmt::Debug for Wallet<P>

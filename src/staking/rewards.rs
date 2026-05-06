@@ -1,22 +1,21 @@
 /// ```rust,no_run
-    /// # use starkzap_rs::{OnboardConfig, StarkZap, StarkZapConfig,
-    /// #     signer::StarkSigner, staking::presets::mainnet_validators,
-    /// #     tokens::mainnet};
-    /// # async fn example() -> starkzap_rs::error::Result<()> {
-    /// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
-    /// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
-    /// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
-    /// # let validator = &mainnet_validators()[0];
-    /// let strk = mainnet::strk();
-    ///
-    /// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
-    /// let pos = wallet.get_pool_position(pool, &strk).await?;
-    /// println!("Staked: {}", pos.staked);
-    /// println!("Rewards: {}", pos.rewards);
-    /// # Ok(())
-    /// # }
-    /// ```
- 
+/// # use starkzap_rs::{OnboardConfig, StarkZap, StarkZapConfig,
+/// #     signer::StarkSigner, staking::presets::mainnet_validators,
+/// #     tokens::mainnet};
+/// # async fn example() -> starkzap_rs::error::Result<()> {
+/// # let sdk = StarkZap::new(StarkZapConfig::mainnet());
+/// # let signer = StarkSigner::new("0xprivkey", "0xaddress")?;
+/// # let wallet = sdk.onboard(OnboardConfig::Signer(signer)).await?;
+/// # let validator = &mainnet_validators()[0];
+/// let strk = mainnet::strk();
+///
+/// let pool = wallet.get_staker_pools(validator.staker_address).await?[0].address;
+/// let pos = wallet.get_pool_position(pool, &strk).await?;
+/// println!("Staked: {}", pos.staked);
+/// println!("Rewards: {}", pos.rewards);
+/// # Ok(())
+/// # }
+/// ```
 use starknet::{
     core::{
         types::{BlockId, BlockTag, Call, Felt, FunctionCall},
@@ -45,7 +44,10 @@ where
     let mut attempts = 0usize;
 
     loop {
-        match provider.call(call.clone(), BlockId::Tag(BlockTag::Latest)).await {
+        match provider
+            .call(call.clone(), BlockId::Tag(BlockTag::Latest))
+            .await
+        {
             Ok(result) => return Ok(result),
             Err(error) if attempts < 2 && should_retry_provider_error(&error) => {
                 attempts += 1;
@@ -68,6 +70,8 @@ fn should_retry_provider_error(error: &starknet::providers::ProviderError) -> bo
 /// The current staking position for a delegator in a given pool.
 #[derive(Debug, Clone)]
 pub struct PoolPosition {
+    /// Whether the wallet is registered as a member of this pool.
+    pub is_member: bool,
     /// Amount currently staked (in smallest token unit).
     pub staked: Amount,
     /// Accumulated rewards not yet claimed (in smallest token unit).
@@ -80,6 +84,12 @@ impl PoolPosition {
     /// Returns `true` if there is no staked balance.
     pub fn is_empty(&self) -> bool {
         self.staked.is_zero()
+    }
+
+    /// Returns `true` when future stake should use `add_to_delegation_pool`
+    /// instead of the first-time `enter_delegation_pool` entrypoint.
+    pub fn can_add_to_pool(&self) -> bool {
+        self.is_member
     }
 }
 
@@ -133,8 +143,8 @@ where
                 calldata: vec![self.address],
             },
         )
-            .await
-            .map_err(StarkzapError::Provider)?;
+        .await
+        .map_err(StarkzapError::Provider)?;
 
         // `get_pool_member_info_v1` returns:
         //   Option<PoolMemberInfoV1>
@@ -144,6 +154,7 @@ where
         // - None => [1]
         if result.first().copied().unwrap_or(Felt::ONE) != Felt::ZERO {
             return Ok(PoolPosition {
+                is_member: false,
                 staked: Amount::from_raw(0, token),
                 rewards: Amount::from_raw(0, token),
                 pool_address: pool_contract,
@@ -164,6 +175,7 @@ where
             .map_err(|_| StarkzapError::AmountOverflow)?;
 
         Ok(PoolPosition {
+            is_member: true,
             staked: Amount::from_raw(staked_raw, token),
             rewards: Amount::from_raw(rewards_raw, token),
             pool_address: pool_contract,

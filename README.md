@@ -259,10 +259,42 @@ amount.is_zero();          // false
 
 ---
 
+## Transfers
+
+```rust
+use starkzap_rs::{Amount, ExecuteOptions, Recipient};
+use starkzap_rs::paymaster::{FeeMode, PaymasterConfig};
+
+let usdc = mainnet::usdc();
+let amount = Amount::parse("10.5", &usdc)?;
+
+// Simple transfer. Defaults to user-pays execution.
+let tx = wallet
+    .transfer(&usdc, vec![Recipient::new(recipient, amount.clone())])
+    .await?;
+
+// TS-style transfer with explicit execution options.
+let tx = wallet
+    .transfer_with_options(
+        &usdc,
+        vec![Recipient::new(recipient, amount)],
+        ExecuteOptions {
+            fee_mode: Some(FeeMode::Paymaster(PaymasterConfig::from_env())),
+        },
+    )
+    .await?;
+```
+
+`transfer_with_options` mirrors StarkZap TS `wallet.transfer(token, transfers, options)`.
+Rust keeps `transfer(...)` as the backward-compatible convenience method and exposes
+the options-aware version explicitly.
+
+---
+
 ## Paymaster (AVNU Gasless)
 
 ```rust
-use starkzap_rs::paymaster::{FeeMode, PaymasterConfig, PaymasterDetails};
+use starkzap_rs::paymaster::{FeeMode, PaymasterConfig};
 
 // Sepolia — no API key needed
 let config = PaymasterConfig::new();
@@ -275,15 +307,15 @@ let config = PaymasterConfig::from_env();
 // Execute any calls gaslessly
 let tx = wallet.execute(calls, FeeMode::Paymaster(config)).await?;
 tx.wait().await?;
-
-// TS-style explicit paymaster flow
-let details = PaymasterDetails::sponsored();
-let hash = wallet
-    .execute_paymaster_transaction(calls, details, std::env::var("AVNU_API_KEY").ok())
-    .await?;
 ```
 
 Obtain a mainnet API key at https://app.avnu.fi.
+
+Sponsored execution mirrors the StarkZap TS wallet flow:
+- if the account is deployed, the SDK sends an invoke-only paymaster transaction
+- if the account is undeployed, the SDK sends deploy-and-invoke through paymaster
+- the undeployed sponsored branch is guarded by a per-wallet deploy lock
+- if another request deploys first, the SDK retries as invoke-only on already-deployed errors
 
 If an account class is not compatible with sponsored execution, the SDK now
 falls back to normal `user_pays` execution instead of failing the entire flow.
@@ -480,7 +512,7 @@ starknet-devnet --seed 0
 - [x] Auto account deploy
 - [x] Token/validator preset codegen
 - [x] WASM build verification
-- [ ] Published to crates.io
+- [x] Published to crates.io
 
 ---
 

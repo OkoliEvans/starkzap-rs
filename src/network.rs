@@ -1,5 +1,7 @@
 //! Network configuration — Mainnet, Sepolia, and Devnet.
 
+use std::str::FromStr;
+
 use starknet::core::types::Felt;
 
 /// The Starknet network to connect to.
@@ -19,6 +21,16 @@ pub enum Network {
 }
 
 impl Network {
+    /// Read `STARKZAP_NETWORK` from the environment.
+    ///
+    /// Defaults to Sepolia when the variable is unset.
+    pub fn from_env() -> Self {
+        std::env::var("STARKZAP_NETWORK")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(Self::Sepolia)
+    }
+
     /// Default public JSON-RPC endpoint for this network.
     ///
     /// For production always pass your own URL via
@@ -27,7 +39,7 @@ impl Network {
         match self {
             Network::Mainnet => "https://starknet.drpc.org",
             Network::Sepolia => "https://starknet-sepolia.drpc.org",
-            Network::Devnet  => "http://127.0.0.1:5050/rpc",
+            Network::Devnet => "http://127.0.0.1:5050/rpc",
         }
     }
 
@@ -39,7 +51,7 @@ impl Network {
             // "SN_SEPOLIA"
             Network::Sepolia => Felt::from_hex_unchecked("0x534e5f5345504f4c4941"),
             // Devnet mirrors Sepolia by default
-            Network::Devnet  => Felt::from_hex_unchecked("0x534e5f5345504f4c4941"),
+            Network::Devnet => Felt::from_hex_unchecked("0x534e5f5345504f4c4941"),
         }
     }
 
@@ -60,7 +72,7 @@ impl Network {
         match self {
             Network::Mainnet => "https://starknet.paymaster.avnu.fi",
             Network::Sepolia => "https://sepolia.paymaster.avnu.fi",
-            Network::Devnet  => "http://localhost:0", // intentionally invalid
+            Network::Devnet => "http://localhost:0", // intentionally invalid
         }
     }
 
@@ -69,7 +81,7 @@ impl Network {
         match self {
             Network::Mainnet => "https://starknet.api.avnu.fi",
             Network::Sepolia => "https://sepolia.api.avnu.fi",
-            Network::Devnet  => "http://localhost:0",
+            Network::Devnet => "http://localhost:0",
         }
     }
 
@@ -91,7 +103,7 @@ impl Network {
             Network::Sepolia => Felt::from_hex_unchecked(
                 "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1",
             ),
-            Network::Devnet  => Felt::ZERO,
+            Network::Devnet => Felt::ZERO,
         }
     }
 }
@@ -101,7 +113,22 @@ impl std::fmt::Display for Network {
         match self {
             Network::Mainnet => write!(f, "mainnet"),
             Network::Sepolia => write!(f, "sepolia"),
-            Network::Devnet  => write!(f, "devnet"),
+            Network::Devnet => write!(f, "devnet"),
+        }
+    }
+}
+
+impl FromStr for Network {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "mainnet" | "main" => Ok(Self::Mainnet),
+            "sepolia" | "testnet" => Ok(Self::Sepolia),
+            "devnet" | "local" => Ok(Self::Devnet),
+            other => Err(format!(
+                "unsupported network '{other}', expected mainnet, sepolia, or devnet"
+            )),
         }
     }
 }

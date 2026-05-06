@@ -92,12 +92,6 @@ struct CreateWalletResponse {
     public_key: Option<String>,
 }
 
-#[derive(Serialize)]
-struct RpcRequest<'a> {
-    method: &'a str,
-    params: serde_json::Value,
-}
-
 #[derive(Deserialize)]
 struct SignResponse {
     data: SignData,
@@ -173,7 +167,9 @@ impl PrivySigner {
             .header("Authorization", auth)
             .header("privy-app-id", &self.app_id)
             .header("Content-Type", "application/json")
-            .json(&CreateWalletRequest { chain_type: "starknet" })
+            .json(&CreateWalletRequest {
+                chain_type: "starknet",
+            })
             .send()
             .await?;
 
@@ -226,14 +222,18 @@ impl PrivySigner {
 
         let resp = self
             .client
-            .post(format!("{}/wallets/{}/rpc", Self::PRIVY_BASE, wallet_id))
+            .post(format!(
+                "https://api.privy.io/v1/wallets/{}/raw_sign",
+                wallet_id
+            ))
             .header("Authorization", auth)
             .header("privy-app-id", &self.app_id)
             .header("Content-Type", "application/json")
-            .json(&RpcRequest {
-                method: "starknet_signHash",
-                params: serde_json::json!({ "hash": format!("{:#x}", hash) }),
-            })
+            .json(&serde_json::json!({
+                "params": {
+                    "hash": format!("{:#x}", hash),
+                },
+            }))
             .send()
             .await?;
 
@@ -279,12 +279,10 @@ fn parse_signature(sig: &str) -> Result<(Felt, Felt)> {
     let parts: Vec<&str> = sig.split(',').collect();
     match parts.as_slice() {
         [r, s] => {
-            let r = Felt::from_hex(r.trim()).map_err(|_| {
-                StarkzapError::PrivySigning(format!("invalid r component: {}", r))
-            })?;
-            let s = Felt::from_hex(s.trim()).map_err(|_| {
-                StarkzapError::PrivySigning(format!("invalid s component: {}", s))
-            })?;
+            let r = Felt::from_hex(r.trim())
+                .map_err(|_| StarkzapError::PrivySigning(format!("invalid r component: {}", r)))?;
+            let s = Felt::from_hex(s.trim())
+                .map_err(|_| StarkzapError::PrivySigning(format!("invalid s component: {}", s)))?;
             Ok((r, s))
         }
         _ => {
